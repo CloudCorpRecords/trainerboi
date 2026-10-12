@@ -9,7 +9,7 @@
   "scripts": {
     "start": "electron .",
     "stage": "node scripts/stage.js",
-    "ui": "npm --prefix ../ui install && npm --prefix ../ui run build",
+    "ui": "cd ../ui && npm install && npm run build",
     "dist": "npm run ui && node scripts/stage.js && electron-builder --win",
     "dist:release": "node scripts/release.js"
   },
