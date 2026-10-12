@@ -1,0 +1,7 @@
+# Optional speed-ups for NVIDIA GPUs on Windows (installed by the desktop app after the core packages).
+bitsandbytes==0.50.2
+triton-windows==3.8.0.post29
+torchao==0.18.0
+unsloth==2026.10.3
+unsloth-zoo==2026.10.3
+# liger-kernel is installed separately with --no-deps (it would otherwise pull a Linux-only triton)

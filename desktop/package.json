@@ -1,0 +1,67 @@
+{
+  "name": "trainerboi-desktop",
+  "productName": "TrainerBoi",
+  "version": "1.0.0",
+  "description": "Train your own AI models on your own computer. No code, no cloud.",
+  "main": "main.js",
+  "author": "TrainerBoi",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "stage": "node scripts/stage.js",
+    "ui": "npm --prefix ../ui install && npm --prefix ../ui run build",
+    "dist": "npm run ui && node scripts/stage.js && electron-builder --win",
+    "dist:release": "node scripts/release.js"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.trainerboi.desktop",
+    "productName": "TrainerBoi",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "setup.html",
+      "setup.js",
+      "assets/**",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "stage/app-src",
+        "to": "app-src"
+      },
+      {
+        "from": "stage/bin",
+        "to": "bin"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.ico",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "TrainerBoi"
+    }
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
+  }
+}

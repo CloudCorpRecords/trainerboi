@@ -1,0 +1,43 @@
+# --- your models, data and logs never belong in git ---
+runs/
+data/*
+!data/samples/
+!data/create_samples.py
+uploads/
+exports/
+output_qlora/
+env_backup/
+unsloth_compiled_cache/
+*.safetensors
+*.pt
+*.pth
+*.gguf
+*.zip
+model_*.json
+gpu_health.json
+settings.json
+
+# --- environments / build output ---
+.venv/
+venv/
+__pycache__/
+*.pyc
+node_modules/
+dist/
+stage/
+ui/dist/
+desktop/dist/
+desktop/stage/
+*.log
+
+# --- personal / editor ---
+.claude/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+.env
+.env.*
+*.pfx
+*.p12
+*.key

@@ -1,0 +1,49 @@
+/* TrainerBoi redesign: sidebar app shell, hero, big action cards, method cards. */
+:root { --tb-accent:#6366f1; --tb-accent2:#22d3ee; --tb-radius:14px; }
+
+/* the sidebar replaces the tab bar */
+.tb-hidden-tabs > .tab-wrapper { display:none !important; }            /* only the outer bar: sub-tabs stay visible */
+.tb-hidden-tabs > .tabitem { border:none !important; padding:4px 0 0 !important; }
+.tb-subtabs > .tab-wrapper { margin-bottom:6px; }
+.tb-subtabs > .tab-wrapper button[role="tab"] { font-weight:600; }
+
+/* sidebar */
+.tb-sidebar { background: linear-gradient(180deg, rgba(99,102,241,.10), transparent 60%) !important; }
+.tb-logo { font-size:20px; font-weight:800; letter-spacing:-.3px; padding:6px 4px 14px; }
+.tb-logo span { display:block; font-size:11px; font-weight:500; opacity:.6; letter-spacing:0; margin-top:2px; }
+button.tb-nav { justify-content:flex-start !important; text-align:left !important; background:transparent !important;
+  border:1px solid transparent !important; box-shadow:none !important; font-weight:600; padding:9px 12px !important; border-radius:10px !important; }
+button.tb-nav:hover { background:rgba(99,102,241,.14) !important; border-color:rgba(99,102,241,.35) !important; }
+
+/* sidebar sections */
+.tb-section { font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; opacity:.5; padding:14px 6px 4px; }
+
+/* hero */
+.tb-hero { padding:34px 30px; border-radius:var(--tb-radius); margin-bottom:10px;
+  background: radial-gradient(1000px 300px at 0% 0%, rgba(99,102,241,.35), transparent 60%),
+              radial-gradient(800px 300px at 100% 100%, rgba(34,211,238,.25), transparent 60%); }
+.tb-hero h1 { font-size:40px; font-weight:800; letter-spacing:-1px; margin:0 0 8px; }
+.tb-hero p { font-size:17px; opacity:.85; max-width:720px; margin:0; }
+
+/* big cards on Home */
+.tb-home-cards { gap:14px; }
+button.tb-big { min-height:130px !important; white-space:pre-line !important; text-align:left !important; align-items:flex-start !important;
+  border-radius:var(--tb-radius) !important; font-size:15px !important; line-height:1.45 !important; padding:18px !important; }
+button.tb-big:first-line { font-size:19px; font-weight:800; }
+
+/* method cards */
+.tb-methods { display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:14px; margin-top:12px; }
+.tb-method { border:1px solid var(--border-color-primary); border-radius:var(--tb-radius); padding:16px; background:var(--block-background-fill); }
+.tb-method-h { display:flex; align-items:center; gap:12px; }
+.tb-method-h .ic { font-size:30px; }
+.tb-method-h b { font-size:16px; display:block; }
+.tb-method-h .lvl { font-size:11px; padding:2px 8px; border-radius:99px; background:rgba(99,102,241,.18); }
+.tb-method .tg { margin:10px 0 2px; font-weight:600; }
+.tb-method .an { margin:0 0 8px; opacity:.75; font-size:13px; }
+.tb-method table { font-size:12.5px; border-collapse:collapse; width:100%; }
+.tb-method td { padding:3px 0; vertical-align:top; }
+.tb-method td:first-child { opacity:.55; width:70px; padding-right:8px; }
+
+.tb-table { border-collapse:collapse; width:100%; font-size:13.5px; }
+.tb-table th, .tb-table td { text-align:left; padding:6px 10px; border-bottom:1px solid var(--border-color-primary); }
+.tb-muted { opacity:.6; }

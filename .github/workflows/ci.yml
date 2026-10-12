@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push: { branches: [main] }
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - name: Python syntax check
+        run: python -m compileall -q .
+
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Build the UI
+        working-directory: ui
+        run: |
+          npm ci
+          npm run build
+      - name: Audit UI dependencies
+        working-directory: ui
+        run: npm audit --omit=dev
+      - name: Check the desktop shell
+        working-directory: desktop
+        run: |
+          npm ci
+          node --check main.js
+          npm audit --omit=dev
+
+      - name: No secrets or personal paths committed
+        shell: bash
+        run: |
+          ! git grep -nE "hf_[A-Za-z0-9]{30,}|ghp_[A-Za-z0-9]{30,}|AKIA[A-Z0-9]{16}|Users.{1,2}cloud" -- . ':!*.md' ':!.github' ':!*.png'
