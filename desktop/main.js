@@ -167,10 +167,10 @@ async function restart() {
 
 // ---------------------------------------------------------------- window / menu
 function createWindow() {
-  win = new BrowserWindow({ width: 1440, height: 920, minWidth: 1040, minHeight: 640, title: 'TrainerBoi', backgroundColor: '#0b0c10',
+  win = new BrowserWindow({ width: 1440, height: 920, minWidth: 1040, minHeight: 640, title: 'TrainerBoi', backgroundColor: '#17152b',
     icon: path.join(__dirname, 'assets', 'icon.png'), autoHideMenuBar: true,
-    titleBarStyle: 'hidden', titleBarOverlay: { color: '#0b0c10', symbolColor: '#8e93a1', height: 38 },
-    webPreferences: { contextIsolation: true, nodeIntegration: false } });
+    titleBarStyle: 'hidden', titleBarOverlay: { color: '#17152b', symbolColor: '#b3acd9', height: 42 },
+    webPreferences: { contextIsolation: true, nodeIntegration: false, preload: path.join(__dirname, 'preload-main.js') } });
   win.setMenuBarVisibility(false);   // our own title bar replaces it; shortcuts still work (Ctrl+R, F12, Ctrl+/-)
   win.loadURL(`http://127.0.0.1:${port}`);
   win.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:/.test(url) && !url.includes(`127.0.0.1:${port}`)) shell.openExternal(url); return { action: 'deny' }; });
@@ -224,10 +224,13 @@ app.whenReady().then(async () => {
     buildMenu();
     if (!isReady()) await setup();
     else syncApp();
-    const splash = new BrowserWindow({ width: 420, height: 260, frame: false, resizable: false, backgroundColor: '#0b0c10', alwaysOnTop: true });
+    const splash = new BrowserWindow({ width: 440, height: 300, frame: false, resizable: false, backgroundColor: '#17152b', alwaysOnTop: true });
     splash.loadURL('data:text/html,' + encodeURIComponent(
-      '<body style="margin:0;background:#0b0c10;color:#e5e7eb;font-family:Segoe UI,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column">' +
-      '<div style="font-size:34px">🚂</div><h2 style="margin:8px 0">TrainerBoi</h2><div style="opacity:.7">Starting the engine…</div></body>'));
+      '<style>@keyframes b{50%{transform:translateY(-8px)}}@keyframes d{0%,100%{opacity:.25}50%{opacity:1}}</style>' +
+      '<body style="margin:0;background:radial-gradient(400px 260px at 30% 10%,#3a2f78,#17152b);color:#f6f2ff;font-family:Segoe UI,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;text-align:center">' +
+      '<div style="font-size:64px;animation:b 1.4s ease-in-out infinite">🚂</div><h2 style="margin:10px 0 4px;font-weight:600">TrainerBoi</h2>' +
+      '<div style="opacity:.75">Packing your little train<span style="animation:d 1.2s infinite">.</span><span style="animation:d 1.2s .2s infinite">.</span><span style="animation:d 1.2s .4s infinite">.</span></div>' +
+      '<div style="opacity:.5;font-size:12px;margin-top:18px">🔒 Everything stays on this computer</div></body>'));
     await startBackend();
     splash.close();
     createWindow();
@@ -241,4 +244,9 @@ app.whenReady().then(async () => {
 
 app.on('before-quit', () => { quitting = true; stopBackend(); });
 app.on('window-all-closed', () => { app.quit(); });
+ipcMain.on('set-theme', (_e, theme) => {
+  if (!win || win.isDestroyed()) return;
+  const dawn = theme === 'dawn';
+  try { win.setTitleBarOverlay({ color: dawn ? '#fff8ef' : '#17152b', symbolColor: dawn ? '#7e6f95' : '#b3acd9', height: 42 }); win.setBackgroundColor(dawn ? '#fff8ef' : '#17152b'); } catch (e) { /* older Electron */ }
+});
 ipcMain.handle('open-log', () => shell.showItemInFolder(LOG));

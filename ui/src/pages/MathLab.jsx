@@ -4,6 +4,7 @@ import { Calculator, Play, Square, MessageCircle, Check, Lightbulb } from 'lucid
 import { post, usePoll, toast, fmt } from '../api'
 import { Button, Card, Chip, Field, PageHeader, Progress, Stat, Md } from '../ui'
 import { Bars, LineChart } from '../charts'
+import { Mascot } from '../mascot'
 
 const MODELS = [['Qwen/Qwen2.5-0.5B-Instruct', 'Qwen2.5 0.5B — fastest'], ['Qwen/Qwen2.5-1.5B-Instruct', 'Qwen2.5 1.5B'], ['Qwen/Qwen2.5-3B-Instruct', 'Qwen2.5 3B']]
 const tone = { running: 'info', done: 'ok', error: 'bad', crashed: 'bad', stopped: 'neutral' }
@@ -29,17 +30,17 @@ export default function MathLab() {
 
   return (
     <div className="page">
-      <PageHeader title="Math Lab" sub="Teach a small model maths with no dataset. It practises endless self-checking problems, keeps only the attempts a checker proves correct, and learns from those." />
+      <PageHeader title="Math playground 🧮" sub="No homework to collect! The model practises endless problems that check themselves, keeps only the answers that are proven right, and learns from those — just like a student with a friendly answer key." />
       <div className="grid" style={{ gridTemplateColumns: '320px 1fr', alignItems: 'start' }}>
         <div className="stack">
-          <Card title="New practice run">
+          <Card title="A new practice session">
             <div className="stack">
               <Field label="Model to improve"><select value={cfg.model} onChange={(e) => setCfg({ ...cfg, model: e.target.value })}>{MODELS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
               <Field label={`Rounds of practice: ${cfg.rounds}`}><input type="range" min="1" max="8" value={cfg.rounds} onChange={(e) => setCfg({ ...cfg, rounds: +e.target.value })} /></Field>
               <Field label={`New problems per round: ${cfg.problems}`}><input type="range" min="100" max="3000" step="100" value={cfg.problems} onChange={(e) => setCfg({ ...cfg, problems: +e.target.value })} /></Field>
               <Field label={`Attempts per problem: ${cfg.samples}`} hint="More attempts find more correct solutions on hard problems."><input type="range" min="2" max="8" value={cfg.samples} onChange={(e) => setCfg({ ...cfg, samples: +e.target.value })} /></Field>
               <Field label={`Hardest level: ${cfg.max_level}`} hint="1 = easy arithmetic · 5 = multi-step, big numbers"><input type="range" min="1" max="5" value={cfg.max_level} onChange={(e) => setCfg({ ...cfg, max_level: +e.target.value })} /></Field>
-              <Button variant="primary" icon={Play} onClick={start} disabled={busy || running}>{running ? 'A run is in progress' : 'Start practising'}</Button>
+              <Button variant="primary" icon={Play} onClick={start} disabled={busy || running}>{running ? 'Practising right now…' : 'Start practising 🌟'}</Button>
             </div>
           </Card>
           {runs?.length > 0 && (
@@ -56,25 +57,25 @@ export default function MathLab() {
 
         <div className="stack">
           {!d ? (
-            <Card><div className="empty"><Calculator size={30} /><h3>No run yet</h3><p>Start one on the left. A short test (1–2 rounds, small model) takes about 10 minutes.</p></div></Card>
+            <Card><div className="empty"><Mascot mood="happy" size={110} /><h3>Nothing practised yet</h3><p>Start a session on the left. A short one (1–2 rounds, small model) takes about ten minutes.</p></div></Card>
           ) : (
             <>
               <div className="row spread">
-                <div className="row"><Chip tone={tone[d.state] || 'neutral'}>{d.state === 'crashed' ? 'stopped unexpectedly' : d.state}</Chip><span className="muted">{d.phase}</span></div>
+                <div className="row"><Chip tone={tone[d.state] || 'neutral'}>{d.state === 'crashed' ? 'paused unexpectedly' : d.state === 'done' ? 'all done!' : d.state === 'running' ? 'practising' : d.state}</Chip><span className="muted">{d.phase}</span></div>
                 <div className="row">
                   {running && <Button variant="danger" size="sm" icon={Square} onClick={() => post(`/api/math/${encodeURIComponent(sel)}/stop`)}>Stop</Button>}
                   {(d.final_model || d.current_model) && <Link to={`/models/${encodeURIComponent(sel + '::math')}`}><Button size="sm" icon={MessageCircle}>Chat with it · Share</Button></Link>}
                 </div>
               </div>
               {running && <Progress value={d.rounds_total ? doneRounds / d.rounds_total : null} />}
-              {d.error && <div className="callout bad" style={{ flexDirection: 'column' }}><b>{d.help?.title || 'Something went wrong'}</b>{d.help && <div>{d.help.advice}</div>}<details><summary>Technical details</summary><pre className="log">{d.error.slice(-1500)}</pre></details></div>}
+              {d.error && <div className="callout bad" style={{ flexDirection: 'column' }}><b>Oops — a small hiccup{d.help ? `: ${d.help.title.toLowerCase()}` : ''}. Your progress so far is safe.</b>{d.help && <div>{d.help.advice}</div>}<details><summary>Technical details</summary><pre className="log">{d.error.slice(-1500)}</pre></details></div>}
               <div className="grid g4">
                 <Stat label="Exam score" value={now ? Math.round(100 * now.overall) : '–'} unit="%" sub={rounds.length > 1 ? `started at ${Math.round(100 * base.overall)}%` : 'before training'} tone={rounds.length > 1 && now.overall > base.overall ? 'ok' : undefined} />
                 <Stat label="Rounds done" value={`${doneRounds}/${d.rounds_total || '?'}`} />
                 <Stat label="Verified solutions learned" value={fmt.n(d.kept || 0)} sub="proven correct by a checker" />
                 <Stat label="Answers in \boxed{}" value={now ? Math.round(100 * now.boxed_pct) : '–'} unit="%" />
               </div>
-              <Card title="Exam score after each round">
+              <Card title="Exam score after each round 🌱">
                 <LineChart xLabel="round" yLabel="" height={190} empty="The first score appears after the opening exam…"
                   series={[{ name: 'exam score (%)', color: 'var(--accent-2)', points: rounds.map((r) => ({ x: r.round, y: 100 * r.overall })) }]} />
               </Card>

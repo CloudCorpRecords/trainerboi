@@ -3,6 +3,7 @@ import { Activity, FolderOpen, ShieldCheck, Thermometer } from 'lucide-react'
 import { post, usePoll, useJob, useHardware, toast, fmt } from '../api'
 import { Button, Card, Chip, Field, PageHeader, Progress, Stat } from '../ui'
 import { Sparkline } from '../charts'
+import { Mascot, tempMood } from '../mascot'
 
 export default function Settings() {
   const { hw, history } = useHardware()
@@ -21,7 +22,7 @@ export default function Settings() {
 
   return (
     <div className="page" style={{ maxWidth: 900 }}>
-      <PageHeader title="Settings & health" sub="Live readings straight from the NVIDIA driver, plus the safety net that keeps long trainings correct." />
+      <PageHeader title="Care & comfort 💜" sub="Keeping your graphics card happy and your results trustworthy. Everything here is live, straight from your computer." />
 
       <div className="grid g4" style={{ marginBottom: 16 }}>
         <Stat label="GPU" value={g?.name || '–'}><div className="small faint">{g?.vram_total_gb ? `${Math.round(g.vram_total_gb)} GB memory` : ''}</div></Stat>
@@ -40,7 +41,7 @@ export default function Settings() {
           </div>
         </Card>
 
-        <Card title="GPU safety">
+        <Card title="Keeping it cozy 🧊">
           <p className="muted" style={{ marginBottom: 14 }}>Laptop GPUs can silently compute wrong answers when they get very hot (we measured this at about 86°C on this machine). TrainerBoi pauses training when the GPU reaches the limit below and continues once it has cooled down.</p>
           <Field label={`Pause training at ${cap}°C${cap === 0 ? ' (off)' : ''}`} hint="82°C is a good default. Lower is safer but slower. 0 turns the safety pause off.">
             <input type="range" min="0" max="92" value={cap} onChange={(e) => setCap(+e.target.value)} />
@@ -48,7 +49,7 @@ export default function Settings() {
           <div style={{ marginTop: 10 }}><Button icon={Thermometer} onClick={saveCap} disabled={s && cap === s.gpu_max_temp}>Save</Button></div>
         </Card>
 
-        <Card title="GPU health check" action={health && <Chip tone={health.stable ? 'ok' : 'bad'}>{health.stable ? 'Stable' : 'Errors found'}</Chip>}>
+        <Card title="Wellness check 🩺" action={health && <Chip tone={health.stable ? 'ok' : 'bad'}>{health.stable ? 'Feeling great' : 'Needs a little care'}</Chip>}>
           <p className="muted" style={{ marginBottom: 12 }}>Runs the same calculations thousands of times under full load for about 3 minutes and checks the answers never change. Do this once — it tells you whether your GPU can be trusted for long runs.</p>
           {health && (
             <div className={`callout ${health.stable ? 'ok' : 'bad'}`} style={{ marginBottom: 12 }}>
@@ -57,7 +58,7 @@ export default function Settings() {
             </div>
           )}
           <div className="row wrap">
-            <Button icon={Activity} variant="primary" onClick={check} disabled={job?.state === 'running' || running}>{job?.state === 'running' ? 'Testing…' : 'Run health check'}</Button>
+            <Button icon={Activity} variant="primary" onClick={check} disabled={job?.state === 'running' || running}>{job?.state === 'running' ? 'Checking in…' : 'Run the wellness check'}</Button>
             {running && <span className="small muted">Available when no training is running.</span>}
           </div>
           {job?.state === 'running' && (

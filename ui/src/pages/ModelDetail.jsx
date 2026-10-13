@@ -4,6 +4,7 @@ import { MessageCircle, Share2, FileText, Settings2, Send, Square, Package, Glob
 import { j, post, sse, usePoll, useJob, toast, fmt } from '../api'
 import { Button, Card, Chip, Field, PageHeader, Tabs, Progress } from '../ui'
 import { KIND } from './Models'
+import { Mascot } from '../mascot'
 
 function Chat({ rec }) {
   const [msgs, setMsgs] = useState([])
@@ -37,9 +38,14 @@ function Chat({ rec }) {
         <div className="chat">
           <div className="chat-scroll">
             {!msgs.length && <div className="muted" style={{ margin: 'auto', textAlign: 'center' }}>
-              {raw ? 'This model was built from scratch to continue text. Type a few words (like “Once upon a time”) and it will continue.' : 'Say something to your model.'}
+              {raw ? 'This little model was built from scratch to continue text. Type a few words (like “Once upon a time”) and see where it goes. 📖' : 'Say hello to your model — it\'s been looking forward to meeting you. 👋'}
             </div>}
-            {msgs.map((m, i) => <div key={i} className={`msg ${m.role === 'user' ? 'user' : 'bot'} ${busy && i === msgs.length - 1 ? 'typing' : ''}`}>{m.content || (loading ? 'Loading the model (first message only)…' : '')}</div>)}
+            {msgs.map((m, i) => (
+              <div key={i} className={`bubble-row ${m.role === 'user' ? 'user' : ''}`}>
+                {m.role !== 'user' && <Mascot mood={busy && i === msgs.length - 1 ? 'working' : 'happy'} size={40} />}
+                <div className={`msg ${m.role === 'user' ? 'user' : 'bot'} ${busy && i === msgs.length - 1 ? 'typing' : ''}`}>{m.content || (loading ? 'Waking the model up (just the first time)…' : '')}</div>
+              </div>
+            ))}
             <div ref={end} />
           </div>
           <div className="chat-input">
@@ -88,7 +94,7 @@ function Share({ rec }) {
           <div className="seg"><button className={kind === 'full' ? 'on' : ''} onClick={() => setKind('full')}>Full model <span className="faint">(works anywhere)</span></button>
             <button className={kind === 'adapter' ? 'on' : ''} onClick={() => setKind('adapter')}>Small adapter <span className="faint">(needs the base model)</span></button></div></div>
       )}
-      <ShareRow icon={Package} title="Send as a file" text="One .zip with the model, an auto-written model card and a chat script. Works offline — share it any way you like.">
+      <ShareRow icon={Package} title="Wrap it up as a gift 🎁" text="One .zip with the model, a friendly model card and a chat script. Works offline — send it any way you like.">
         <div className="row wrap">
           <Button variant="primary" icon={Package} onClick={makeZip} disabled={zipJob?.state === 'running'}>{zipJob?.state === 'running' ? 'Preparing…' : 'Create zip'}</Button>
           {zipJob?.state === 'running' && <span className="muted small">{zipJob.log?.slice(-1)[0] || 'Working…'}</span>}
@@ -148,9 +154,9 @@ function Manage({ rec, onSaved }) {
         </div>
       </Card>
       <Card title="Location"><div className="row spread"><code style={{ wordBreak: 'break-all' }}>{rec.path}</code><Button size="sm" icon={FolderOpen} onClick={() => post('/api/reveal', { path: rec.path })}>Show</Button></div></Card>
-      <Card title="Delete">
-        <p className="muted small" style={{ marginBottom: 10 }}>Deletes this run's folder: the model, checkpoints and logs. This can't be undone.</p>
-        <label className="row small" style={{ marginBottom: 10 }}><input type="checkbox" checked={sure} onChange={(e) => setSure(e.target.checked)} /> Yes, delete this model permanently</label>
+      <Card title="Say goodbye">
+        <p className="muted small" style={{ marginBottom: 10 }}>This removes the model, its checkpoints and logs from your computer, and can't be undone. Only do this if you're sure. 🍃</p>
+        <label className="row small" style={{ marginBottom: 10 }}><input type="checkbox" checked={sure} onChange={(e) => setSure(e.target.checked)} /> Yes, I'm sure — say goodbye to this model</label>
         <Button variant="danger" icon={Trash2} disabled={!sure} onClick={async () => { await post(`/api/models/${id}/delete`); toast('Deleted.'); nav('/models') }}>Delete</Button>
       </Card>
     </div>
@@ -164,7 +170,7 @@ export default function ModelDetail() {
   const { data: models, reload } = usePoll('/api/models', 8000)
   const tab = params.get('tab') || 'chat'
   const rec = models?.find((m) => m.id === id)
-  if (!models) return <div className="page muted">Loading…</div>
+  if (!models) return <div className="page"><div className="row muted"><Mascot mood="working" size={56} /> Fetching your model…</div></div>
   if (!rec) return <div className="page"><PageHeader title="Model not found" sub="It may have been deleted." actions={<Link to="/models"><Button icon={ArrowLeft}>All models</Button></Link>} /></div>
   return (
     <div className="page">
@@ -173,7 +179,7 @@ export default function ModelDetail() {
         actions={<Link to="/models"><Button variant="ghost" icon={ArrowLeft}>All models</Button></Link>} />
       <Tabs value={tab} onChange={(t) => setParams({ tab: t })} tabs={[
         { id: 'chat', label: 'Chat', icon: MessageCircle }, { id: 'share', label: 'Share', icon: Share2 },
-        { id: 'card', label: 'Model card', icon: FileText }, { id: 'manage', label: 'Manage', icon: Settings2 }]} />
+        { id: 'card', label: 'About it', icon: FileText }, { id: 'manage', label: 'Tidy up', icon: Settings2 }]} />
       {tab === 'chat' && (rec.chat_ok === false ? <div className="callout warn">This is an embedding model — it finds similar text instead of chatting. Use it from Advanced tools → RAG.</div> : <Chat rec={rec} />)}
       {tab === 'share' && <Share rec={rec} />}
       {tab === 'card' && <Card_ rec={rec} />}

@@ -1,0 +1,120 @@
+import { useEffect, useMemo, useState } from 'react'
+
+/** "Boi" - the little train. Moods: happy, working, sleepy, toasty, cheer, oops. Pure SVG + CSS, themed by --m-* variables. */
+export function Mascot({ mood = 'happy', size = 96, className = '', title }) {
+  const eyes = {
+    happy: [<Eye key="l" x={47} />, <Eye key="r" x={73} />],
+    working: [<Eye key="l" x={47} look />, <Eye key="r" x={73} look />],
+    toasty: [<Eye key="l" x={47} />, <Eye key="r" x={73} />],
+    oops: [<Eye key="l" x={47} big />, <Eye key="r" x={73} big />],
+    sleepy: [<path key="l" d="M40 63 Q47 69 54 63" className="m-line" />, <path key="r" d="M66 63 Q73 69 80 63" className="m-line" />],
+    cheer: [<path key="l" d="M40 65 Q47 56 54 65" className="m-line" />, <path key="r" d="M66 65 Q73 56 80 65" className="m-line" />],
+  }[mood] || null
+  const mouth = {
+    happy: <path d="M52 73 Q60 81 68 73" className="m-line" />,
+    working: <path d="M53 74 Q60 79 67 74" className="m-line" />,
+    sleepy: <path d="M56 75 Q60 77.5 64 75" className="m-line" />,
+    toasty: <path d="M51 75 Q55.5 71 60 75 T69 75" className="m-line" />,
+    cheer: <path d="M50 70 Q60 88 70 70 Z" fill="#ff7fa8" stroke="var(--m-ink)" strokeWidth="2.5" strokeLinejoin="round" />,
+    oops: <path d="M53 79 Q60 72 67 79" className="m-line" />,
+  }[mood]
+  return (
+    <svg className={`mascot mood-${mood} ${className}`} width={size} height={size} viewBox="0 0 120 120" role="img" aria-label={title || 'Boi the little train'}>
+      {title && <title>{title}</title>}
+      <g className="m-puffs">
+        <circle cx="88" cy="16" r="5" /><circle cx="95" cy="9" r="4" /><circle cx="84" cy="7" r="3" />
+      </g>
+      <g className="m-bob">
+        <rect x="78" y="21" width="14" height="20" rx="4" fill="var(--m-accent2)" />
+        <rect x="74" y="17" width="22" height="9" rx="4.5" fill="var(--m-accent)" />
+        <rect x="22" y="22" width="34" height="22" rx="9" fill="var(--m-roof)" />
+        <rect x="14" y="34" width="92" height="58" rx="28" fill="var(--m-body)" />
+        <ellipse cx="38" cy="46" rx="14" ry="5" fill="#fff" opacity=".22" />
+        <ellipse cx="42" cy="73" rx="6.5" ry="4" fill="var(--m-cheek)" opacity=".75" />
+        <ellipse cx="78" cy="73" rx="6.5" ry="4" fill="var(--m-cheek)" opacity=".75" />
+        {mood === 'toasty' && <ellipse cx="42" cy="73" rx="7" ry="4.5" fill="#ff7fa8" opacity=".5" />}
+        <g className="m-eyes">{eyes}</g>
+        {mood === 'oops' && <><path d="M41 50 L55 54" className="m-line thin" /><path d="M79 50 L65 54" className="m-line thin" /></>}
+        {mood === 'toasty' && <path className="m-drop" d="M92 46 Q96 53 92 56 Q88 53 92 46Z" fill="#8fd3ff" />}
+        {mouth}
+        {['sleepy'].includes(mood) && <g className="m-zzz"><text x="92" y="38" fontSize="12">z</text><text x="100" y="28" fontSize="9">z</text></g>}
+        {mood === 'cheer' && <g className="m-sparks">
+          <path d="M14 30 l2 5 5 2 -5 2 -2 5 -2 -5 -5 -2 5 -2z" /><path d="M104 38 l1.5 4 4 1.5 -4 1.5 -1.5 4 -1.5 -4 -4 -1.5 4 -1.5z" /><path d="M60 8 l1.5 4 4 1.5 -4 1.5 -1.5 4 -1.5 -4 -4 -1.5 4 -1.5z" />
+        </g>}
+        <g className="m-wheels">
+          {[34, 60, 86].map((x) => (
+            <g key={x}><circle cx={x} cy="98" r="11" fill="var(--m-wheel)" /><g className="m-wheel"><circle cx={x} cy="98" r="5" fill="var(--m-accent)" /><rect x={x - 1} y="88" width="2" height="6" rx="1" fill="var(--m-ink)" opacity=".35" /></g></g>
+          ))}
+        </g>
+      </g>
+      <rect x="6" y="110" width="108" height="3.5" rx="1.75" fill="var(--m-track)" />
+    </svg>
+  )
+}
+
+function Eye({ x, big, look }) {
+  const r = big ? [7.5, 9] : [6, 8]
+  return (
+    <g transform={`translate(${x} 62)`}>
+      <g className="m-eye">
+        <ellipse cx={look ? 1.2 : 0} cy="0" rx={r[0]} ry={r[1]} fill="var(--m-ink)" />
+        <circle cx={(look ? 1.2 : 0) + 2.2} cy="-3" r="2.3" fill="#fff" />
+        <circle cx={(look ? 1.2 : 0) - 2} cy="3" r="1.1" fill="#fff" opacity=".8" />
+      </g>
+    </g>
+  )
+}
+
+/** A little track that Boi rides along. value 0..1, or null for "we don't know how long" (rolls back and forth). */
+export function Track({ value, label, mood }) {
+  const v = value == null ? null : Math.max(0, Math.min(1, value))
+  const m = mood || (v === 1 ? 'cheer' : 'working')
+  return (
+    <div className="track-wrap">
+      <div className="track">
+        <div className="track-fill" style={{ width: v == null ? '0%' : `${v * 100}%` }} />
+        <div className="track-ties" />
+        <div className={`track-boi ${v == null ? 'roam' : ''}`} style={v == null ? undefined : { left: `calc(${v * 100}% - ${v * 44}px)` }}>
+          <Mascot mood={m} size={52} />
+        </div>
+        <div className="track-flag" aria-hidden="true">🌸</div>
+      </div>
+      {label && <div className="track-label">{label}</div>}
+    </div>
+  )
+}
+
+/** Soft floating clouds / twinkling stars behind a hero. Decorative only. */
+export function Sky() {
+  return (
+    <div className="sky" aria-hidden="true">
+      <span className="cloud c1" /><span className="cloud c2" /><span className="cloud c3" />
+      {[...Array(9)].map((_, i) => <span key={i} className={`star s${i}`}>✦</span>)}
+    </div>
+  )
+}
+
+/** One gentle burst of petals and sparkles. Plays once. */
+export function Confetti({ play }) {
+  const [on, setOn] = useState(false)
+  useEffect(() => { if (play) { setOn(true); const t = setTimeout(() => setOn(false), 5200); return () => clearTimeout(t) } }, [play])
+  const bits = useMemo(() => [...Array(34)].map((_, i) => ({
+    left: (i * 29) % 100, delay: ((i * 37) % 100) / 100 * 1.4, dur: 2.8 + ((i * 13) % 20) / 10,
+    glyph: ['🌸', '✨', '💜', '⭐', '🎈', '🌼'][i % 6], size: 14 + ((i * 7) % 12),
+  })), [])
+  if (!on) return null
+  return (
+    <div className="confetti" aria-hidden="true">
+      {bits.map((b, i) => <span key={i} style={{ left: `${b.left}%`, animationDelay: `${b.delay}s`, animationDuration: `${b.dur}s`, fontSize: b.size }}>{b.glyph}</span>)}
+    </div>
+  )
+}
+
+/** How warm the GPU feels, in words (the number is always shown next to it). */
+export function tempMood(t) {
+  if (t == null) return { word: 'resting', tone: 'ok', mood: 'happy' }
+  if (t < 55) return { word: 'cool and comfy', tone: 'ok', mood: 'happy' }
+  if (t < 70) return { word: 'nice and warm', tone: 'ok', mood: 'happy' }
+  if (t < 79) return { word: 'getting toasty', tone: 'warn', mood: 'toasty' }
+  return { word: 'needs a little breather', tone: 'bad', mood: 'toasty' }
+}

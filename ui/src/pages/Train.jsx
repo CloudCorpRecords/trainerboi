@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { FileText, MessageCircle, Brain, Code2, Scale, Blocks, UploadCloud, X, ArrowRight, ArrowLeft, Rocket, Link2, Check, Lightbulb, ChevronDown } from 'lucide-react'
+import { UploadCloud, X, ArrowRight, ArrowLeft, Link2, Check, Lightbulb, ChevronDown } from 'lucide-react'
 import { j, post, usePoll, toast } from '../api'
 import { Button, Card, Chip, Field, PageHeader, Md } from '../ui'
+import { Mascot } from '../mascot'
 
-const ICONS = { docs: FileText, persona: MessageCircle, instruct: Brain, code: Code2, prefer: Scale, scratch: Blocks }
+const EMOJI = { docs: '📄', persona: '💬', instruct: '🧠', code: '💻', prefer: '⚖️', scratch: '🧱' }
 const SRC_LABEL = { urls: 'Website', hf: 'Hugging Face', wikipedia: 'Wikipedia', arxiv: 'Papers', github: 'GitHub', youtube: 'YouTube', folders: 'On this PC' }
 const EMPTY_SRC = { urls: [], hf: [], wikipedia: [], arxiv: [], github: [], youtube: [], folders: [] }
 
 function Steps({ step }) {
-  const items = ['Goal', 'Data', 'Plan']
+  const items = ['What', 'Examples', 'Ready']
   return (
     <div className="steps">
       {items.map((t, i) => (
@@ -95,20 +96,19 @@ export default function Train() {
 
   const suggest = hint?.goal && hint.goal !== goal ? meta?.goals.find((x) => x.key === hint.goal) : null
 
-  if (!meta) return <div className="page"><PageHeader title="New training" /><div className="muted">Loading…</div></div>
+  if (!meta) return <div className="page"><PageHeader title="Teach a model" /><div className="row muted"><Mascot mood="working" size={56} /> Warming up…</div></div>
 
   return (
     <div className="page" style={{ maxWidth: 980 }}>
-      <PageHeader title="New training" sub="Three quick steps. We pick the model, method and every setting — you can change anything." />
+      <PageHeader title="Teach a model" sub="Three gentle steps. We'll pick the model and every setting for you — and you can change anything you like." />
       <Steps step={step} />
 
       {step === 0 && (
         <div className="goal-grid">
           {meta.goals.map((x) => {
-            const I = ICONS[x.key] || Brain
             return (
               <button key={x.key} className={`goal ${goal === x.key ? 'on' : ''}`} onClick={() => setGoal(x.key)}>
-                <div className="ico"><I size={19} /></div><h4>{x.title}</h4><p>{x.blurb}</p>
+                <div className="ico">{EMOJI[x.key] || '✨'}</div><h4>{x.title}</h4><p>{x.blurb}</p>
               </button>
             )
           })}
@@ -118,27 +118,27 @@ export default function Train() {
       {step === 1 && (
         <div className="stack">
           {g?.key === 'persona' && (
-            <Card title="Personality">
+            <Card title="Give it a personality 🎭">
               <Field label="Describe your assistant's name, tone and role" hint="Taught into every example. Leave empty for a neutral assistant.">
                 <textarea value={persona} onChange={(e) => setPersona(e.target.value)} placeholder="You are Max, a cheerful support agent for AcmeBank. You answer briefly, warmly, and always suggest a next step." />
               </Field>
             </Card>
           )}
-          <Card title={g?.needs === 'files' ? 'Your data (required)' : 'Your data (optional)'}>
+          <Card title={g?.needs === 'files' ? 'Your examples (this goal learns from them)' : 'Your examples (optional — we can bring some)'}>
             <p className="muted" style={{ marginBottom: 14 }}>{g?.data_hint}</p>
             <div className={`drop ${over ? 'over' : ''}`} onClick={() => fileRef.current?.click()}
               onDragOver={(e) => { e.preventDefault(); setOver(true) }} onDragLeave={() => setOver(false)}
               onDrop={(e) => { e.preventDefault(); setOver(false); upload([...e.dataTransfer.files]) }}>
               <UploadCloud size={26} style={{ marginBottom: 6 }} />
-              <div><b>Drop files here</b> or click to choose</div>
+              <div style={{ fontSize: 17 }}><b>Drop your files here</b> 🌱 or click to choose</div>
               <div className="small faint" style={{ marginTop: 4 }}>PDF, Word, text, web pages, CSV, JSON, code, zip, audio/video…</div>
               <input ref={fileRef} type="file" multiple hidden onChange={(e) => { upload([...e.target.files]); e.target.value = '' }} />
             </div>
             <div style={{ marginTop: 16 }}>
-              <Field label="Or paste anything" hint="Links, YouTube videos, GitHub repos, Hugging Face datasets, folder paths — or just name a topic. One per line.">
+              <Field label="Or paste anything" hint="Links, YouTube videos, GitHub repos, Hugging Face datasets, folder paths — or just name a topic you're curious about. One per line.">
                 <textarea value={paste} onChange={(e) => setPaste(e.target.value)} placeholder={'beekeeping basics\nhttps://docs.python.org/3/tutorial/\nhttps://github.com/owner/repo\nyahma/alpaca-cleaned'} />
               </Field>
-              <div className="row" style={{ marginTop: 8 }}><Button icon={Link2} onClick={addPaste} disabled={!paste.trim()}>Add</Button></div>
+              <div className="row" style={{ marginTop: 8 }}><Button icon={Link2} onClick={addPaste} disabled={!paste.trim()}>Add it</Button></div>
             </div>
             {(files.length > 0 || Object.values(src).some((a) => a.length)) && (
               <div className="row wrap" style={{ marginTop: 16 }}>
@@ -166,28 +166,28 @@ export default function Train() {
               </div>
             )}
           </Card>
-          {needs && <div className="callout warn">This goal needs your data — add files, a link, a repo or a topic to continue.</div>}
+          {needs && <div className="callout warn"><Mascot mood="happy" size={44} /><div>This one learns from <b>your own examples</b> — pop in a file, a link, a repo or a topic and we can keep going. 🌱</div></div>}
         </div>
       )}
 
       {step === 2 && (
         <div className="stack">
-          <Card title="How much time do you have?">
+          <Card title="How much time would you like to spend?">
             <div className="effort">
               {meta.efforts.map((e) => (
                 <button key={e.key} className={effort === e.key ? 'on' : ''} onClick={() => setEffort(e.key)}><b>{e.title}</b><span>{e.blurb}</span></button>
               ))}
             </div>
           </Card>
-          <Card title="Your plan">
-            {!plan ? <div className="muted">Working out the best settings…</div> : (
+          <Card title="Here's the plan 🗺️">
+            {!plan ? <div className="row muted"><Mascot mood="working" size={48} /> Working out the cosiest settings…</div> : (
               <>
                 <div className="row wrap" style={{ marginBottom: 10 }}>
                   <Chip tone="accent">About {plan.minutes} min</Chip><Chip>~{plan.vram_gb} GB GPU memory</Chip>
                   {plan.downloads_model && <Chip>First run downloads the model</Chip>}
                 </div>
                 {plan.steps.map((s, i) => <div className="plan-step" key={i}><i>{i + 1}</i><div><b>{s.title}</b><div className="muted">{s.text}</div></div></div>)}
-                <details style={{ marginTop: 8 }}><summary className="muted" style={{ cursor: 'pointer' }}>Why these settings?</summary>
+                <details style={{ marginTop: 8 }}><summary className="muted" style={{ cursor: 'pointer' }}>Why these settings? 🤔</summary>
                   <ul className="muted" style={{ paddingLeft: 18 }}>{plan.reasons.map((r, i) => <li key={i} style={{ margin: '6px 0' }}><Md text={r} /></li>)}</ul>
                 </details>
               </>
@@ -208,8 +208,8 @@ export default function Train() {
       <div className="wiz-foot">
         <Button icon={ArrowLeft} variant="ghost" onClick={() => setStep(Math.max(0, step - 1))} disabled={step === 0}>Back</Button>
         {step < 2
-          ? <Button variant="primary" onClick={() => setStep(step + 1)} disabled={step === 1 && needs}>Continue <ArrowRight size={16} /></Button>
-          : <Button variant="primary" icon={Rocket} onClick={start} disabled={starting || needs}>{starting ? 'Starting…' : 'Start training'}</Button>}
+          ? <Button variant="primary" onClick={() => setStep(step + 1)} disabled={step === 1 && needs}>Next <ArrowRight size={16} /></Button>
+          : <Button variant="primary" onClick={start} disabled={starting || needs}>{starting ? 'Hopping on…' : "Let's go! 🚂"}</Button>}
       </div>
     </div>
   )

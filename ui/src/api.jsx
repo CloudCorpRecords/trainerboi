@@ -118,3 +118,11 @@ export const fmt = {
   mb(m) { return m >= 1024 ? `${(m / 1024).toFixed(1)} GB` : `${Math.round(m)} MB` },
   n(x, d = 0) { return x == null ? '–' : Number(x).toLocaleString(undefined, { maximumFractionDigits: d, minimumFractionDigits: d }) },
 }
+
+// ---------------------------------------------------------------- theme (dusk = cozy night, dawn = soft daylight)
+export const getTheme = () => { try { return localStorage.getItem('tb-theme') || 'dusk' } catch { return 'dusk' } }
+export function applyTheme(t) {
+  document.documentElement.dataset.theme = t
+  try { localStorage.setItem('tb-theme', t) } catch { /* ignore */ }
+  window.tbShell?.setTheme?.(t)    // colours the native window buttons in the desktop app
+}
