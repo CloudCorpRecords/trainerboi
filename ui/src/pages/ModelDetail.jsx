@@ -5,6 +5,7 @@ import { j, post, sse, usePoll, useJob, toast, fmt } from '../api'
 import { Button, Card, Chip, Field, PageHeader, Tabs, Progress } from '../ui'
 import { KIND } from './Models'
 import { Mascot } from '../mascot'
+import { useCompanion } from '../companion'
 
 function Chat({ rec }) {
   const [msgs, setMsgs] = useState([])
@@ -42,7 +43,7 @@ function Chat({ rec }) {
             </div>}
             {msgs.map((m, i) => (
               <div key={i} className={`bubble-row ${m.role === 'user' ? 'user' : ''}`}>
-                {m.role !== 'user' && <Mascot mood={busy && i === msgs.length - 1 ? 'working' : 'happy'} size={40} />}
+                {m.role !== 'user' && <Mascot mood={busy && i === msgs.length - 1 ? (loading || !m.content ? 'think' : 'working') : 'happy'} size={44} />}
                 <div className={`msg ${m.role === 'user' ? 'user' : 'bot'} ${busy && i === msgs.length - 1 ? 'typing' : ''}`}>{m.content || (loading ? 'Waking the model up (just the first time)…' : '')}</div>
               </div>
             ))}
@@ -74,11 +75,15 @@ function ShareRow({ icon: I, title, text, children }) {
 function Share({ rec }) {
   const [kind, setKind] = useState(rec.adapter ? 'adapter' : 'full')
   const [zipJob, followZip] = useJob()
+  const { say } = useCompanion()
   const [pubJob, followPub] = useJob()
   const [repo, setRepo] = useState('')
   const [priv, setPriv] = useState(true)
   const [token, setToken] = useState('')
   const { data: share, reload } = usePoll('/api/share', 2500)
+  useEffect(() => { if (zipJob?.state === 'done') say('Wrapped up with a bow! 🎁 Send it to someone you like.', 'love', 9000) }, [zipJob?.state])
+  useEffect(() => { if (pubJob?.state === 'done') say('Published! Your little model is out in the world. 💜', 'love', 9000) }, [pubJob?.state])
+  useEffect(() => { if (share?.state === 'live') say('Your link is live! Friends can say hello now. 💜', 'love', 9000) }, [share?.state])
   const mine = share && share.model_id === rec.id
   const id = encodeURIComponent(rec.id)
 

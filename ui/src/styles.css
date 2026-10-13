@@ -298,3 +298,90 @@ pre.log { background: var(--bg-2); border: 1.5px solid var(--border); border-rad
 .grade { border-radius: 22px; display: grid; place-items: center; font-family: var(--font-head); font-weight: 600; }
 @media (max-width: 1000px) { .action-grid, .g4 { grid-template-columns: repeat(2, 1fr); } .goal-grid, .g3 { grid-template-columns: repeat(2, 1fr); } .body { grid-template-columns: 210px 1fr; } .hero { grid-template-columns: 1fr; } .hero .mascot { display: none; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .001s !important; animation-iteration-count: 1 !important; transition-duration: .001s !important; } .confetti { display: none; } }
+
+/* ============================================================ more motion + companion ============================================================ */
+.page-anim { animation: page-in .45s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes page-in { from { opacity: 0; transform: translateY(14px); } }
+
+/* things rise gently into place, one after another */
+.grid > *, .action-grid > *, .stack > .card, .hero, .live-card, .steps, .page-head { animation: rise .55s cubic-bezier(.2, .8, .2, 1) both; }
+.grid > *:nth-child(2), .action-grid > *:nth-child(2) { animation-delay: .06s; } .grid > *:nth-child(3), .action-grid > *:nth-child(3) { animation-delay: .12s; }
+.grid > *:nth-child(4), .action-grid > *:nth-child(4) { animation-delay: .18s; } .grid > *:nth-child(5) { animation-delay: .24s; } .grid > *:nth-child(6) { animation-delay: .3s; }
+@keyframes rise { from { opacity: 0; transform: translateY(18px) scale(.985); } }
+
+/* mascot: eyes follow the pointer, extra moods */
+.mascot .m-look { transform: translate(var(--lx, 0px), var(--ly, 0px)); transition: transform .14s ease-out; }
+.mascot .m-heart-eye { fill: #ff7fa8; transform-box: fill-box; transform-origin: center; animation: heartbeat 1.1s ease-in-out infinite; }
+.mascot.mood-love .m-bob { animation: idle 2.4s ease-in-out infinite; }
+.mascot .m-hearts path { fill: #ff7fa8; opacity: 0; animation: heart-up 2.2s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+.mascot .m-hearts path:nth-child(2) { animation-delay: .7s; } .mascot .m-hearts path:nth-child(3) { animation-delay: 1.4s; }
+.mascot.mood-think .m-bob { animation: tilt 3s ease-in-out infinite; }
+.mascot .m-thought circle { fill: var(--surface-3); stroke: var(--border-2); stroke-width: 1; opacity: 0; animation: pop-dot 1.8s ease-in-out infinite; }
+.mascot .m-thought circle:nth-child(2) { animation-delay: .25s; } .mascot .m-thought circle:nth-child(3) { animation-delay: .5s; }
+@keyframes heartbeat { 50% { transform: scale(1.22); } }
+@keyframes heart-up { 0% { opacity: 0; transform: translateY(8px) scale(.5); } 30% { opacity: .95; } 100% { opacity: 0; transform: translateY(-16px) scale(1.2); } }
+@keyframes tilt { 0%, 100% { transform: rotate(-2.5deg); } 50% { transform: rotate(2.5deg) translateY(-2px); } }
+@keyframes pop-dot { 0%, 15% { opacity: 0; transform: scale(.3); } 40%, 80% { opacity: 1; transform: scale(1); } 100% { opacity: 0; } }
+
+/* the companion in the corner */
+.companion { position: fixed; right: 22px; bottom: 18px; z-index: 40; display: flex; align-items: flex-end; gap: 6px; pointer-events: none; }
+.companion > * { pointer-events: auto; }
+.boi-btn { background: none; border: none; padding: 0; cursor: pointer; filter: drop-shadow(0 8px 14px rgba(20, 10, 60, .3)); transition: transform .25s cubic-bezier(.3, 1.5, .5, 1); }
+.boi-btn:hover { transform: scale(1.1) rotate(-3deg); }
+.boi-btn.hop { animation: boi-hop .8s cubic-bezier(.3, 1.4, .5, 1); }
+.boi-btn.spin { animation: boi-spin .9s cubic-bezier(.3, 1.2, .5, 1); }
+@keyframes boi-hop { 0%, 100% { transform: translateY(0) scale(1); } 35% { transform: translateY(-26px) scale(1.06, .96); } 60% { transform: translateY(0) scale(.96, 1.06); } }
+@keyframes boi-spin { to { transform: rotate(360deg) scale(1.05); } }
+.companion.asleep .boi-btn { opacity: .75; filter: saturate(.7) drop-shadow(0 4px 8px rgba(20, 10, 60, .25)); }
+.boi-sleep { position: absolute; right: -4px; top: -2px; width: 24px; height: 24px; border-radius: 50%; border: 1.5px solid var(--border-2); background: var(--surface-2); cursor: pointer; font-size: 12px; line-height: 1; opacity: 0; transition: .2s; display: grid; place-items: center; }
+.companion:hover .boi-sleep { opacity: 1; }
+.speech { position: relative; max-width: 270px; margin-bottom: 30px; padding: 12px 30px 12px 16px; border-radius: 20px 20px 6px 20px; background: var(--surface-2); border: 1.5px solid var(--border-2); box-shadow: var(--shadow); font-weight: 700; font-size: 14px; line-height: 1.4; animation: speech-in .45s cubic-bezier(.3, 1.4, .5, 1) both; }
+.speech::after { content: ''; position: absolute; right: -9px; bottom: 6px; width: 16px; height: 16px; background: var(--surface-2); border-right: 1.5px solid var(--border-2); border-bottom: 1.5px solid var(--border-2); transform: skewX(-30deg) rotate(-20deg); border-radius: 0 0 6px 0; }
+.speech button { position: absolute; top: 8px; right: 8px; background: none; border: none; color: var(--faint); cursor: pointer; display: grid; place-items: center; padding: 2px; border-radius: 50%; }
+.speech button:hover { color: var(--text); background: var(--surface-3); }
+@keyframes speech-in { from { opacity: 0; transform: translateY(10px) scale(.88); transform-origin: bottom right; } }
+.toasts { bottom: 150px; }
+
+/* sparkles from button clicks */
+.burst-bit { position: fixed; z-index: 70; pointer-events: none; transform: translate(-50%, -50%); animation: burst .95s ease-out forwards; }
+@keyframes burst { 0% { opacity: 1; transform: translate(-50%, -50%) scale(.4); } 100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1.3) rotate(50deg); } }
+
+/* sun / moon in the hero sky */
+.orb { position: absolute; right: 250px; top: 24px; width: 38px; height: 38px; border-radius: 50%; background: radial-gradient(circle at 35% 32%, #fffbe6, #ffe29a 70%); box-shadow: 0 0 34px 10px rgba(255, 226, 154, .35); animation: breathe 5s ease-in-out infinite; }
+[data-theme="dawn"] .orb { background: radial-gradient(circle at 40% 36%, #fff2b8, #ffc15a 75%); box-shadow: 0 0 44px 16px rgba(255, 190, 90, .45); }
+.hero .mascot { position: relative; }
+
+/* the garden */
+.garden-card .card-body { padding-top: 6px; }
+.garden { position: relative; border-radius: 20px; overflow: hidden; padding: 24px 20px 0; min-height: 168px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--sky) 14%, var(--bg-2)) 0%, var(--bg-2) 100%); }
+.g-sun { position: absolute; right: 26px; top: 14px; width: 34px; height: 34px; border-radius: 50%; background: radial-gradient(circle at 38% 34%, #fffbe6, #ffe29a 72%); box-shadow: 0 0 30px 8px rgba(255, 226, 154, .3); animation: breathe 6s ease-in-out infinite; }
+.g-butterfly { position: absolute; top: 40px; left: 0; font-size: 22px; animation: flutter 17s ease-in-out infinite; z-index: 2; pointer-events: none; }
+@keyframes flutter { 0% { transform: translate(0, 30px) rotate(8deg); } 20% { transform: translate(24vw, 0) rotate(-10deg); } 45% { transform: translate(40vw, 40px) rotate(12deg); } 70% { transform: translate(58vw, 6px) rotate(-8deg); } 100% { transform: translate(78vw, 36px) rotate(8deg); } }
+.g-row { position: relative; z-index: 1; display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; padding-bottom: 12px; min-height: 110px; }
+.g-spot { position: relative; display: flex; flex-direction: column; align-items: center; width: 74px; }
+.g-name { position: absolute; bottom: -2px; font-size: 11px; font-weight: 800; opacity: 0; transform: translateY(6px); transition: .2s; background: var(--surface-2); border: 1.5px solid var(--border-2); padding: 1px 8px; border-radius: 99px; white-space: nowrap; max-width: 110px; overflow: hidden; text-overflow: ellipsis; z-index: 3; }
+.g-spot:hover .g-name { opacity: 1; transform: translateY(-84px); }
+.flower { transform-origin: 24px 78px; animation: sway 3.4s ease-in-out infinite alternate; transition: transform .25s cubic-bezier(.3, 1.5, .5, 1); overflow: visible; }
+.g-spot:hover .flower { animation-play-state: paused; transform: scale(1.18) rotate(4deg); }
+.flower .bloom { transform-box: fill-box; transform-origin: center; animation: bloom-in .9s cubic-bezier(.3, 1.6, .5, 1) both; }
+@keyframes sway { from { transform: rotate(-4deg); } to { transform: rotate(4deg); } }
+@keyframes bloom-in { from { transform: scale(0) rotate(-40deg); } }
+.g-ground { position: absolute; left: 0; right: 0; bottom: 0; height: 22px; background: linear-gradient(180deg, #8fe0a8, #6fcf97); border-radius: 60% 60% 0 0 / 100% 100% 0 0; opacity: .75; }
+.g-seed { display: flex; align-items: flex-end; gap: 12px; color: var(--muted); font-weight: 700; padding-bottom: 14px; }
+.sprout { transform-box: fill-box; transform-origin: 50% 100%; animation: sprout 2.6s ease-in-out infinite alternate; }
+@keyframes sprout { from { transform: scale(.82) rotate(-3deg); } to { transform: scale(1) rotate(3deg); } }
+
+/* growing seedling at the end of the track */
+.track-flag { animation: flag-pop .7s cubic-bezier(.3, 1.8, .5, 1) both, idle 3s ease-in-out .7s infinite; transform-origin: 50% 100%; }
+@keyframes flag-pop { from { transform: scale(.2); opacity: 0; } }
+
+/* loading dots and the bell */
+.loading .dots { display: inline-flex; gap: 4px; margin-left: 2px; }
+.loading .dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: pop-dot 1.2s ease-in-out infinite; }
+.loading .dots i:nth-child(2) { animation-delay: .2s; } .loading .dots i:nth-child(3) { animation-delay: .4s; }
+.theme-toggle .bell { flex: 0 0 34px; display: grid; place-items: center; }
+.theme-toggle .bell.on { background: var(--accent-soft); color: var(--accent); }
+.stat-value { transition: color .3s; }
+.nav a.active { animation: nav-in .35s cubic-bezier(.3, 1.4, .5, 1); }
+@keyframes nav-in { from { transform: translateX(-6px); } }

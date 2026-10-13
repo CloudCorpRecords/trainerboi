@@ -8,7 +8,7 @@ NVIDIA GPU - no code, no cloud, no account. A beginner can get a good result in 
 * 📚 **Data tools** - paste links / repos / datasets / a topic, auto-quality grading (Data doctor), one-click cleaning.
 * 🧭 **Many methods** - SFT, LoRA/QLoRA, DPO, ORPO, KTO, GRPO reinforcement learning, pretraining, verified self-improvement.
 * 🏆 **Share** - chat with your model, then send a zip, publish to Hugging Face, or open a temporary public link.
-* 🌸 **Calm and cute** - meet Boi, the little train who rides along while you train; soft colours, two themes (cozy night / soft day), gentle words, and a graphics card that tells you how it feels.
+* 🌸 **Calm and cute** - meet Boi, the little train: his eyes follow your mouse, he cheers milestones, blushes when you share, sweats when the GPU is toasty, and hops when you click him (double-click for a spin; the 💤 button lets him nap). A garden grows one flower per model, pages glide in, and numbers count up. Two themes (night / day), optional little sounds (the bell), gentle words.
 * 🛡️ **Safe by default** - local-only server, hot-GPU protection, no tokens stored. See [SECURITY.md](SECURITY.md).
 
 ## Install

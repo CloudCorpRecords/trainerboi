@@ -4,6 +4,7 @@ import { UploadCloud, X, ArrowRight, ArrowLeft, Link2, Check, Lightbulb, Chevron
 import { j, post, usePoll, toast } from '../api'
 import { Button, Card, Chip, Field, PageHeader, Md } from '../ui'
 import { Mascot } from '../mascot'
+import { useCompanion } from '../companion'
 
 const EMOJI = { docs: '📄', persona: '💬', instruct: '🧠', code: '💻', prefer: '⚖️', scratch: '🧱' }
 const SRC_LABEL = { urls: 'Website', hf: 'Hugging Face', wikipedia: 'Wikipedia', arxiv: 'Papers', github: 'GitHub', youtube: 'YouTube', folders: 'On this PC' }
@@ -44,6 +45,11 @@ export default function Train() {
   const [over, setOver] = useState(false)
   const [adv, setAdv] = useState(false)
   const fileRef = useRef(null)
+  const { say } = useCompanion()
+  useEffect(() => {
+    const lines = ['What would you like to teach? Pick whatever sounds fun. 🌈', 'Show me some examples — files, links, or just a topic you\'re curious about. 📚', 'Almost ready! Take a peek at the plan, then press the big button. 🚂']
+    say(lines[step], step === 1 ? 'think' : 'happy', 6500)
+  }, [step])
 
   const g = meta?.goals.find((x) => x.key === goal)
   const hasData = files.length > 0 || Object.values(src).some((a) => a.length) || !!dataset

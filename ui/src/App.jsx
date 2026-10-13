@@ -1,10 +1,13 @@
-import { useState } from 'react'
-import { NavLink, Route, Routes, useNavigate } from 'react-router-dom'
-import { Home as HomeIcon, Sparkles, Calculator, Database, Trophy, Wrench, HeartPulse, Lock, Moon, Sun } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { Home as HomeIcon, Sparkles, Calculator, Database, Trophy, Wrench, HeartPulse, Lock, Moon, Sun, Bell, BellOff } from 'lucide-react'
 import { useHardware, getTheme, applyTheme } from './api'
 import { Chip, Toasts, Progress } from './ui'
 import { Mascot, tempMood } from './mascot'
 import { Sparkline } from './charts'
+import { CompanionProvider } from './companion'
+import { installSparkles } from './effects'
+import { soundOn, setSound, pop } from './sound'
 import Home from './pages/Home'
 import Train from './pages/Train'
 import Run from './pages/Run'
@@ -70,22 +73,27 @@ function SideGpu() {
 
 function ThemeToggle() {
   const [t, setT] = useState(getTheme())
+  const [snd, setSnd] = useState(soundOn())
   const set = (v) => { applyTheme(v); setT(v) }
   return (
     <div className="theme-toggle">
-      <button className={t === 'dusk' ? 'on' : ''} onClick={() => set('dusk')}><Moon size={12} style={{ verticalAlign: -1 }} /> Cozy night</button>
-      <button className={t === 'dawn' ? 'on' : ''} onClick={() => set('dawn')}><Sun size={12} style={{ verticalAlign: -1 }} /> Soft day</button>
+      <button className={`bell ${snd ? 'on' : ''}`} title={snd ? 'Little sounds are on' : 'Turn on little sounds'} onClick={() => { const v = !snd; setSound(v); setSnd(v); if (v) pop() }}>{snd ? <Bell size={13} /> : <BellOff size={13} />}</button>
+      <button className={t === 'dusk' ? 'on' : ''} onClick={() => set('dusk')}><Moon size={12} style={{ verticalAlign: -1 }} /> Night</button>
+      <button className={t === 'dawn' ? 'on' : ''} onClick={() => set('dawn')}><Sun size={12} style={{ verticalAlign: -1 }} /> Day</button>
     </div>
   )
 }
 
 export default function App() {
   const { hw } = useHardware()
+  const loc = useLocation()
   const busy = !!hw?.jobs?.some((j) => j.kind !== 'data')
+  useEffect(() => installSparkles(), [])
   return (
+    <CompanionProvider>
     <div className="app">
       <div className="titlebar">
-        <div className="brand"><Mascot mood="happy" size={28} />TrainerBoi</div>
+        <div className="brand" onClick={() => document.querySelector('.boi-btn')?.click()} title="Say hi to Boi"><Mascot mood="happy" size={30} />TrainerBoi</div>
         <JobPill />
       </div>
       <div className="body">
@@ -103,7 +111,8 @@ export default function App() {
           <ThemeToggle />
         </aside>
         <main className="main">
-          <Routes>
+          <div className="page-anim" key={loc.pathname}>
+          <Routes location={loc}>
             <Route path="/" element={<Home />} />
             <Route path="/train" element={<Train />} />
             <Route path="/run/:name" element={<Run />} />
@@ -115,9 +124,11 @@ export default function App() {
             <Route path="/settings" element={<Settings />} />
             <Route path="*" element={<Home />} />
           </Routes>
+          </div>
         </main>
       </div>
       <Toasts />
     </div>
+    </CompanionProvider>
   )
 }

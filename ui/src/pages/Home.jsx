@@ -1,7 +1,8 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowRight } from 'lucide-react'
 import { useHardware, usePoll, fmt } from '../api'
-import { Card, Chip, Stat, Empty } from '../ui'
+import { Card, Chip, Stat, Empty, Num } from '../ui'
+import { Garden } from '../garden'
 import { Sparkline } from '../charts'
 import { Mascot, Sky, Track, tempMood } from '../mascot'
 import { jobLink } from '../App'
@@ -49,14 +50,14 @@ export default function Home() {
       )}
 
       <div className="grid g4">
-        <Stat label="How hard it's working" value={g?.util != null ? Math.round(g.util) : '–'} unit="%"><Sparkline data={history.util} min={0} max={100} color="var(--accent)" /></Stat>
-        <Stat label="Memory in use" value={g?.vram_used_gb != null ? g.vram_used_gb.toFixed(1) : '–'} unit={`/ ${g?.vram_total_gb ? Math.round(g.vram_total_gb) : '–'} GB`}>
+        <Stat label="How hard it's working" value={<Num v={g?.util} />} unit="%"><Sparkline data={history.util} min={0} max={100} color="var(--accent)" /></Stat>
+        <Stat label="Memory in use" value={<Num v={g?.vram_used_gb} d={1} />} unit={`/ ${g?.vram_total_gb ? Math.round(g.vram_total_gb) : '–'} GB`}>
           <Sparkline data={history.vram} min={0} max={g?.vram_total_gb || 16} color="var(--sky)" />
         </Stat>
-        <Stat label="Temperature" value={g?.temp != null ? Math.round(g.temp) : '–'} unit="°C" tone={m.tone} sub={g?.temp != null ? `Feeling ${m.word}${g.temp >= 80 ? ' — it will pause to cool down' : ''}` : ''}>
+        <Stat label="Temperature" value={<Num v={g?.temp} />} unit="°C" tone={m.tone} sub={g?.temp != null ? `Feeling ${m.word}${g.temp >= 80 ? ' — it will pause to cool down' : ''}` : ''}>
           <Sparkline data={history.temp} color="var(--peach)" />
         </Stat>
-        <Stat label="Energy" value={g?.power != null ? Math.round(g.power) : '–'} unit={g?.power_limit ? `/ ${Math.round(g.power_limit)} W` : 'W'}>
+        <Stat label="Energy" value={<Num v={g?.power} />} unit={g?.power_limit ? `/ ${Math.round(g.power_limit)} W` : 'W'}>
           <Sparkline data={history.power} min={0} max={g?.power_limit || 150} color="var(--mint)" />
         </Stat>
       </div>
@@ -68,7 +69,11 @@ export default function Home() {
         <Link to="/models" className="action"><div className="ico">💬</div><h4>My little models</h4><p>Say hello to what you've made, then share it with friends.</p></Link>
       </div>
 
-      <div className="grid g2" style={{ gridTemplateColumns: '1.4fr 1fr' }}>
+      <Card title="Your garden 🌷 — one flower for every model you've taught" className="garden-card">
+        <Garden models={models} />
+      </Card>
+
+      <div className="grid g2" style={{ gridTemplateColumns: '1.4fr 1fr', marginTop: 16 }}>
         <Card title="Your little models" action={<Link to="/models" className="small muted">See all</Link>}>
           {!models?.length ? (
             <Empty title="No models yet" text="Let's make your first one together — it only takes about ten minutes!"

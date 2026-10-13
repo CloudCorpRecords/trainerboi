@@ -4,6 +4,7 @@ import { Check, Circle, Loader2, X, Square, RotateCcw, MessageCircle, Share2, Sn
 import { post, usePoll, useHardware, fmt, toast } from '../api'
 import { Button, Card, Chip, Progress, Stat, PageHeader, Md } from '../ui'
 import { Mascot, Track, Confetti } from '../mascot'
+import { useCompanion } from '../companion'
 import { LineChart, smooth } from '../charts'
 
 const stateTone = { running: 'info', done: 'ok', error: 'warn', crashed: 'warn', stopped: 'neutral' }
@@ -53,8 +54,24 @@ export default function Run() {
   const [showLog, setShowLog] = useState(false)
   const [party, setParty] = useState(false)
   const prev = useRef(null)
+  const { say, celebrate } = useCompanion()
+  const marks = useRef({})
+  const firstLoss = useRef(null)
   const g = hw?.gpu
-  useEffect(() => { if (prev.current === 'running' && r?.state === 'done') setParty(true); if (r) prev.current = r.state }, [r?.state])
+  useEffect(() => { if (prev.current === 'running' && r?.state === 'done') { setParty(true); celebrate('Your model is ready! 🎉 Want to say hello to it?') } if (r) prev.current = r.state }, [r?.state])
+  useEffect(() => {   // little cheers along the way
+    const lv = r?.live
+    if (!lv || r?.state !== 'running' || !lv.max_steps) return
+    const f = lv.step / lv.max_steps
+    for (const [k, msg] of [[0.25, 'A quarter of the way there! 🌱'], [0.5, 'Halfway! You\'re doing wonderfully. 🌿'], [0.75, 'Three quarters done — nearly there! 🌷']]) {
+      if (f >= k && !marks.current[k]) { marks.current[k] = true; if (f < k + 0.1) say(msg, 'cheer', 6000) }
+    }
+    const loss = lv.latest?.loss
+    if (typeof loss === 'number') {
+      if (firstLoss.current == null) firstLoss.current = loss
+      if (!marks.current.half && loss < firstLoss.current * 0.5) { marks.current.half = true; say('The loss is half of where it started — that means it\'s really learning! 🧠✨', 'cheer', 8000) }
+    }
+  }, [r?.live?.step])
 
   if (error && !r) return <div className="page"><PageHeader title="Run not found" sub={error} /></div>
   if (!r) return <div className="page"><div className="muted">Loading…</div></div>

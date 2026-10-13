@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { toast as _t } from './api'
 import { X, Check, AlertTriangle, Info } from 'lucide-react'
 
@@ -83,4 +83,24 @@ export function Md({ text }) {
   const parts = String(text || '').split(/(\*\*[^*]+\*\*|`[^`]+`|\*[^*]+\*)/g)
   return <>{parts.map((p, i) => p.startsWith('**') ? <b key={i}>{p.slice(2, -2)}</b> : p.startsWith('`') ? <code key={i}>{p.slice(1, -1)}</code>
     : p.startsWith('*') && p.length > 2 ? <i key={i}>{p.slice(1, -1)}</i> : <span key={i}>{p}</span>)}</>
+}
+
+/** A number that glides to its new value instead of jumping. */
+export function Num({ v, d = 0 }) {
+  const [shown, setShown] = useState(v)
+  const from = useRef(v)
+  useEffect(() => {
+    if (typeof v !== 'number' || !isFinite(v)) { setShown(v); from.current = v; return }
+    const start = typeof from.current === 'number' ? from.current : v
+    const t0 = performance.now()
+    let raf
+    const step = (t) => {
+      const k = Math.min(1, (t - t0) / 650)
+      setShown(start + (v - start) * (1 - Math.pow(1 - k, 3)))
+      if (k < 1) raf = requestAnimationFrame(step); else from.current = v
+    }
+    raf = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(raf)
+  }, [v])
+  return typeof shown === 'number' ? shown.toFixed(d) : '–'
 }
