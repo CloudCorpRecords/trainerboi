@@ -1,0 +1,22 @@
+name: Idea or feature request
+description: Suggest something that would make training easier or more fun.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What would you like to do?
+      description: The goal in plain words, like "train a model on my class notes" or "compare two runs side by side".
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: How could TrainerBoi help?
+      description: Your idea for how it could work. Sketches and screenshots welcome.
+  - type: checkboxes
+    id: help
+    attributes:
+      label: Want to build it?
+      options:
+        - label: I'd like to work on this myself (we'll help you get started)

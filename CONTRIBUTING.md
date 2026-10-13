@@ -1,6 +1,14 @@
 # Contributing
 
-Thanks for helping make model training easier for everyone.
+Thanks for helping make model training easier for everyone. You don't need to be an ML expert to help: fixing a confusing message, improving a doc, or adding a recipe are all great first contributions.
+
+## Your first contribution
+
+1. Pick an issue labelled [`good first issue`](https://github.com/CloudCorpRecords/trainerboi/labels/good%20first%20issue) or [`help wanted`](https://github.com/CloudCorpRecords/trainerboi/labels/help%20wanted), and leave a comment so others know you're on it.
+2. Fork the repo, make a branch, and follow *Run it from source* below. No NVIDIA GPU? UI work (`ui/`) and docs don't need one.
+3. Open a pull request; the template lists the checks. Small PRs are welcome and get reviewed fastest.
+
+Stuck or have an idea that isn't an issue yet? Ask in [Discussions](https://github.com/CloudCorpRecords/trainerboi/discussions). Please follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Run it from source
 

@@ -25,8 +25,16 @@ setup.bat        # Python 3.11 env + PyTorch for your GPU + libraries + UI
 START.bat        # opens http://127.0.0.1:7860     (or launch_desktop.bat for the Electron app)
 ```
 
-Contributions welcome - see [CONTRIBUTING.md](CONTRIBUTING.md). Licensed under the [MIT License](LICENSE). Models you train keep the licence of their
-base model (shown on the model card).
+## Get involved
+
+TrainerBoi is open to contributors of every level, including first-timers.
+
+* ⭐ **Star the repo** to follow along, or **Watch → Releases** to hear about new versions.
+* 🐣 **First PR?** Pick a [good first issue](https://github.com/CloudCorpRecords/trainerboi/labels/good%20first%20issue) and read [CONTRIBUTING.md](CONTRIBUTING.md). UI and docs work don't need a GPU.
+* 💬 **Questions, ideas, or a model you're proud of?** Share it in [Discussions](https://github.com/CloudCorpRecords/trainerboi/discussions).
+* 🐛 **Something broke?** [Open an issue](https://github.com/CloudCorpRecords/trainerboi/issues/new/choose) with your GPU and the technical log.
+
+Licensed under the [MIT License](LICENSE). Models you train keep the licence of their base model (shown on the model card).
 
 ---
 
