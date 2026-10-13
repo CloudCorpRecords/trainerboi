@@ -107,6 +107,9 @@ function Hat({ kind }) {
     case 'crown': return <g className="m-hat"><path d="M26 24 L26 9 L32.5 17 L39 6 L45.5 17 L52 9 L52 24Z" fill="#ffd36b" stroke="#ffab7d" strokeWidth="2" strokeLinejoin="round" /><circle cx="39" cy="14" r="2.3" fill="#ff9ecb" /></g>
     case 'sparkle': return <g className="m-hat"><path d="M24 30 Q39 12 54 30" stroke="#d3c6ff" strokeWidth="3" fill="none" strokeLinecap="round" /><path d="M39 4 l2.6 6.4 6.4 2.6 -6.4 2.6 -2.6 6.4 -2.6 -6.4 -6.4 -2.6 6.4 -2.6z" fill="#ffe29a" /></g>
     case 'bow': return <g className="m-hat"><path d="M30 30 L14 20 L14 40Z" fill="#ff9ecb" /><path d="M30 30 L46 20 L46 40Z" fill="#ff7fb5" /><circle cx="30" cy="30" r="5" fill="#ffc0dd" /></g>
+    case 'chef': return <g className="m-hat"><rect x="26" y="26" width="26" height="10" rx="3" fill="#fff" /><circle cx="29" cy="20" r="8" fill="#fff" /><circle cx="39" cy="15" r="9.5" fill="#fff" /><circle cx="50" cy="20" r="8" fill="#fff" /><path d="M26 31 L52 31" stroke="#e6dcff" strokeWidth="2" /></g>
+    case 'hardhat': return <g className="m-hat"><path d="M24 36 Q24 14 39 14 Q54 14 54 36Z" fill="#ffd36b" stroke="#ffab7d" strokeWidth="2" /><rect x="20" y="34" width="38" height="5" rx="2.5" fill="#ffab7d" /><rect x="35" y="14" width="8" height="12" rx="2" fill="#ffc15a" /></g>
+    case 'tophat': return <g className="m-hat"><rect x="26" y="6" width="26" height="26" rx="3" fill="#3a2b63" /><rect x="22" y="30" width="34" height="6" rx="3" fill="#3a2b63" /><rect x="26" y="22" width="26" height="5" fill="#ff9ecb" /></g>
     case 'nightcap': return <g className="m-hat"><path d="M22 36 Q30 -2 72 14 Q50 14 56 36Z" fill="#8fd3ff" /><path d="M22 36 L58 36" stroke="#fff" strokeWidth="5" strokeLinecap="round" opacity=".9" /><circle cx="73" cy="14" r="5" fill="#fff" /></g>
     default: return null
   }

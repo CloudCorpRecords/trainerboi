@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
-import { Home as HomeIcon, Sparkles, Calculator, Database, Trophy, Wrench, HeartPulse, Lock, Moon, Sun, Bell, BellOff, Star, Wand2 } from 'lucide-react'
+import { Home as HomeIcon, Sparkles, Calculator, Database, Trophy, Wrench, HeartPulse, Lock, Moon, Sun, Bell, BellOff, Star, Wand2, Soup, Hammer, Utensils, Search } from 'lucide-react'
 import { useHardware, getTheme, applyTheme, usePoll } from './api'
 import { Chip, Toasts, Progress } from './ui'
 import { Mascot, tempMood } from './mascot'
@@ -11,6 +11,10 @@ import { soundOn, setSound, pop } from './sound'
 import { PixieDust, dustOn, setDust } from './pixie'
 import { earn } from './rewards'
 import Stickers from './pages/Stickers'
+import Gather from './pages/Gather'
+import Workshop from './pages/Workshop'
+import Taste from './pages/Taste'
+import { Palette } from './palette'
 import Home from './pages/Home'
 import Train from './pages/Train'
 import Run from './pages/Run'
@@ -26,9 +30,13 @@ const NAV = [
   { section: 'Make something' },
   { to: '/train', label: 'Teach a model', icon: Sparkles },
   { to: '/math', label: 'Math playground', icon: Calculator },
+  { to: '/gather', label: 'Gather data', icon: Soup },
+  { to: '/workshop', label: 'Workshop', icon: Hammer },
+  { section: 'Look after' },
   { to: '/data', label: 'My data', icon: Database },
-  { section: 'Play' },
   { to: '/models', label: 'My little models', icon: Trophy },
+  { section: 'Play' },
+  { to: '/taste', label: 'Taste test', icon: Utensils },
   { to: '/stickers', label: 'Sticker book', icon: Star },
   { section: 'Cozy corner' },
   { to: '/advanced', label: 'Toolbox', icon: Wrench },
@@ -93,6 +101,12 @@ function ThemeToggle() {
 export default function App() {
   const { hw } = useHardware()
   const loc = useLocation()
+  const [palette, setPalette] = useState(false)
+  useEffect(() => {
+    const h = (e) => { if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === '/')) { e.preventDefault(); setPalette((v) => !v) } }
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+  }, [])
   const busy = !!hw?.jobs?.some((j) => j.kind !== 'data')
   useEffect(() => installSparkles(), [])
   const { data: models } = usePoll('/api/models', 10000)
@@ -117,6 +131,7 @@ export default function App() {
       </div>
       <div className="body">
         <aside className="sidebar">
+          <button className="ask-boi" onClick={() => setPalette(true)}><Search size={15} /> Ask Boi… <kbd>Ctrl K</kbd></button>
           <nav className="nav">
             {NAV.map((n, i) => n.section
               ? <div className="nav-section" key={i}>{n.section}</div>
@@ -138,6 +153,9 @@ export default function App() {
             <Route path="/models" element={<Models />} />
             <Route path="/models/:id" element={<ModelDetail />} />
             <Route path="/stickers" element={<Stickers />} />
+            <Route path="/gather" element={<Gather />} />
+            <Route path="/workshop" element={<Workshop />} />
+            <Route path="/taste" element={<Taste />} />
             <Route path="/math" element={<MathLab />} />
             <Route path="/data" element={<Data />} />
             <Route path="/advanced" element={<Advanced />} />
@@ -147,6 +165,7 @@ export default function App() {
           </div>
         </main>
       </div>
+      <Palette open={palette} setOpen={setPalette} />
       <Toasts />
     </div>
     </CompanionProvider>

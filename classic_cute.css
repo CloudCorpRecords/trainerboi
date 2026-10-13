@@ -1,0 +1,45 @@
+/* Makes the embedded classic tools (the Toolbox) match the calm, cute look of the main app. Gradio colours come from CSS variables. */
+.dark, :root {
+  --body-background-fill: #17152b;
+  --background-fill-primary: #221f3f;
+  --background-fill-secondary: #1c1a34;
+  --block-background-fill: #221f3f;
+  --panel-background-fill: #1c1a34;
+  --border-color-primary: #38336a;
+  --border-color-accent: #b9a5ff;
+  --body-text-color: #f6f2ff;
+  --body-text-color-subdued: #b3acd9;
+  --block-label-text-color: #b3acd9;
+  --block-title-text-color: #d3c6ff;
+  --input-background-fill: #1c1a34;
+  --input-border-color: #47427f;
+  --button-primary-background-fill: linear-gradient(135deg, #b9a5ff, #ff9ecb);
+  --button-primary-background-fill-hover: linear-gradient(135deg, #d3c6ff, #ff9ecb);
+  --button-primary-text-color: #2b2058;
+  --button-primary-border-color: transparent;
+  --button-secondary-background-fill: #2a2750;
+  --button-secondary-background-fill-hover: #34305f;
+  --button-secondary-text-color: #f6f2ff;
+  --button-secondary-border-color: #47427f;
+  --color-accent: #b9a5ff;
+  --color-accent-soft: rgba(185, 165, 255, .16);
+  --slider-color: #b9a5ff;
+  --checkbox-background-color-selected: #b9a5ff;
+  --block-radius: 20px;
+  --block-border-width: 1.5px;
+  --container-radius: 20px;
+  --input-radius: 14px;
+  --button-large-radius: 999px;
+  --button-medium-radius: 999px;
+  --button-small-radius: 999px;
+  --table-radius: 16px;
+  --shadow-drop: 0 6px 22px rgba(8, 6, 28, .3);
+}
+body, .gradio-container { font-family: "Nunito", "Nunito Variable", "Segoe UI", system-ui, sans-serif !important; }
+.gradio-container { max-width: none !important; }
+h1, h2, h3, h4, .tab-wrapper button { font-family: "Fredoka", "Fredoka Variable", "Segoe UI", system-ui, sans-serif; }
+button { font-weight: 800 !important; transition: transform .15s, background .15s !important; }
+button:hover:not(:disabled) { transform: translateY(-1px); }
+.tb-sidebar { background: linear-gradient(180deg, rgba(185, 165, 255, .12), transparent 60%) !important; }
+button.tb-nav { border-radius: 999px !important; }
+.tb-logo { display: none; }

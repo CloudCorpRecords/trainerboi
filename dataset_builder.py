@@ -219,7 +219,9 @@ def quality_issue(text, min_chars, is_code=False):
             return "repetitive lines"
     words = text.split()
     if words:
-        if len(words) >= 50 and len(set(words)) / len(words) < 0.15:
+        # Judge variety on a fixed-size window: over a whole book the share of unique words naturally shrinks, which is not repetition.
+        head = words[:1500]
+        if len(head) >= 50 and len(set(head)) / len(head) < 0.15:
             return "repetitive words"
         avg = sum(len(w) for w in words) / len(words)
         if avg > 15 or avg < 2:

@@ -689,8 +689,9 @@ def datasets():
     out = []
     for d in ds.list_datasets():
         a = jread(os.path.join(ds.ds_dir(d["name"]), "analysis.json"))
+        st = jread(os.path.join(ds.ds_dir(d["name"]), "stats.json"), {}) or {}
         out.append({**{k: d.get(k) for k in ("name", "format", "train", "eval", "state", "size_mb", "tokens", "modified")},
-                    "grade": (a or {}).get("grade"), "health": (a or {}).get("health")})
+                    "grade": (a or {}).get("grade"), "health": (a or {}).get("health"), "train_path": st.get("train_path")})
     return out
 
 
@@ -729,6 +730,258 @@ async def dataset_clean(name: str, req: Request):
     return {"name": out}
 
 
+
+# ================================================================================================ workshop (manual training with every setting)
+TASKS = {
+    "sft": dict(script="train_llm_sft.py", lr=2e-4, goal="instruct"), "dpo": dict(script="train_llm_dpo.py", lr=5e-6, goal="prefer"),
+    "orpo": dict(script="train_llm_orpo.py", lr=8e-6, goal="prefer"), "kto": dict(script="train_llm_kto.py", lr=5e-6, goal="prefer"),
+    "grpo": dict(script="train_llm_grpo.py", lr=5e-6, goal="instruct"), "pretrain": dict(script="pretrain_llm.py", lr=1e-3, goal="scratch"),
+}
+# the friendly method cards -> what actually runs
+METHOD_RUN = {"sft": ("sft", "qlora"), "lora": ("sft", "qlora"), "full": ("sft", "full"), "dpo": ("dpo", "qlora"), "orpo": ("orpo", "qlora"),
+              "kto": ("kto", "qlora"), "grpo": ("grpo", "lora"), "pretrain": ("pretrain", None)}
+REDIRECT = {"mathlab": "/math", "distill": "/gather"}
+
+
+@app.get("/api/methods")
+def methods_list():
+    import methods as M
+    out = []
+    for m in M.METHODS:
+        run = METHOD_RUN.get(m["id"])
+        out.append({k: m.get(k) for k in ("id", "name", "icon", "level", "tagline", "analogy", "data", "gpu", "time", "use_when", "avoid_when")}
+                   | {"run": run[0] if run else None, "mode": run[1] if run else None, "redirect": REDIRECT.get(m["id"])})
+    return {"methods": out, "have": list(M.HAVE), "want": list(M.WANT)}
+
+
+@app.post("/api/methods/recommend")
+async def methods_recommend(req: Request):
+    import methods as M
+    b = await req.json()
+    if b.get("have") not in M.HAVE or b.get("want") not in M.WANT:
+        err("Pick both answers.")
+    mid, why, alts = M.recommend(M.HAVE[b["have"]], M.WANT[b["want"]])
+    return {"id": mid, "why": why, "alternatives": alts}
+
+
+def _stats_for(dataset):
+    import dataset_store as ds
+    for d in ds.list_datasets():
+        st = jread(os.path.join(ds.ds_dir(d["name"]), "stats.json"), {}) or {}
+        if st.get("train_path") and dataset and os.path.normpath(st["train_path"]) == os.path.normpath(dataset):
+            return st
+    return None
+
+
+@app.post("/api/train/recommend")
+async def train_recommend(req: Request):
+    import autopilot
+    b = await req.json()
+    method, effort = b.get("method", "sft"), b.get("effort", "balanced")
+    vram = hw_info.hw_identity().get("vram_gb") or 16.0
+    if method == "grpo":
+        steps = {"quick": 60, "balanced": 200, "best": 600}[effort]
+        return {"model": "Qwen/Qwen2.5-0.5B-Instruct", "steps": steps, "lr": 5e-6, "batch": 1, "grad_accum": 4, "seq_len": 512, "lora_r": 16,
+                "mode": "lora", "minutes": round(steps * 0.45), "reasons": ["**Reinforcement learning is slow per step** (the model writes several answers to every question), so it needs few steps. "
+                                                                           "A small model, 4 answers per question and a low learning rate keep it stable."]}
+    plan = autopilot.train_plan(TASKS[method]["goal"], effort, _stats_for(b.get("dataset")), vram)
+    if plan["task"] == "pretrain":
+        return {"size": plan["size"], "steps": plan["max_steps"], "lr": plan["lr"], "batch": plan["batch_size"], "grad_accum": plan["grad_accum"],
+                "seq_len": plan["seq_len"], "lora_r": 16, "mode": None, "minutes": round(plan["estimate"]["train_sec"] / 60), "reasons": plan["reasons"]}
+    return {"model": plan["model"], "steps": plan["max_steps"], "lr": plan["lr"], "batch": plan["batch_size"], "grad_accum": plan["grad_accum"],
+            "seq_len": plan["max_seq_len"], "lora_r": plan["lora_r"], "mode": "qlora", "minutes": round(plan["estimate"]["train_sec"] / 60), "reasons": plan["reasons"]}
+
+
+@app.post("/api/train/start")
+async def train_start(req: Request):
+    b = await req.json()
+    method = b.get("method")
+    if method not in TASKS:
+        err("Unknown method.")
+    spec = TASKS[method]
+    dataset = (b.get("dataset") or "").strip()
+    if not dataset:
+        err("Choose a dataset first.")
+    if not (os.path.exists(dataset) or os.path.exists(os.path.join(ROOT, dataset)) or dataset in ("demo", "math_gym") or "/" in dataset):
+        err(f"I can't find the dataset '{dataset}'. Pick one from the list or use a Hugging Face id like owner/name.")
+    if hw_info.active_jobs():
+        err("Something is already using the GPU. Wait for it to finish, or stop it first.")
+    import shutil as _sh
+    if _sh.disk_usage(ROOT).free / 1024 ** 3 < 8:
+        err("Less than 8 GB of disk space is free - training needs room. Free some space first.")
+    name = nm(re.sub(r"[^\w.-]+", "-", (b.get("name") or "").strip()).lstrip(".") or f"{method}-{time.strftime('%m%d-%H%M%S')}")
+    if os.path.exists(os.path.join(RUNS, name)):
+        err(f"A run called '{name}' already exists - choose another name.")
+    out_dir = f"runs/{name}"
+    os.makedirs(os.path.join(RUNS, name, "live"), exist_ok=True)
+    cmd = [sys.executable, "-u", spec["script"], "--dataset", dataset, "--output_dir", out_dir, "--max_steps", str(int(b.get("steps", 300))),
+           "--lr", str(float(b.get("lr", spec["lr"]))), "--batch_size", str(int(b.get("batch", 4))), "--sample_every", str(int(b.get("sample_every", 50)))]
+    if b.get("sample_prompt"):
+        cmd += ["--sample_prompt", b["sample_prompt"]]
+    model, mode = b.get("model") or "Qwen/Qwen2.5-0.5B-Instruct", b.get("mode") or "qlora"
+    ga, seq, r = str(int(b.get("grad_accum", 4))), str(int(b.get("seq_len", 1024))), str(int(b.get("lora_r", 16)))
+    if method == "sft":
+        cmd += ["--model", model, "--mode", mode, "--grad_accum", ga, "--max_seq_len", seq, "--lora_r", r]
+        if mode == "full":
+            cmd += ["--backend", "hf"]
+    elif method in ("dpo", "orpo", "kto"):
+        cmd += ["--model", model, "--grad_accum", ga, "--max_len", seq, "--lora_r", r]
+        if mode == "qlora":
+            cmd.append("--load_4bit")
+    elif method == "grpo":
+        cmd += ["--model", model, "--grad_accum", ga, "--lora_r", r, "--reward", "math" if ("gsm8k" in dataset or dataset == "math_gym") else (b.get("reward") or "concise")]
+        if mode == "qlora":
+            cmd.append("--load_4bit")
+    else:
+        cmd += ["--size", b.get("size") or "tiny", "--seq_len", str(min(int(seq), 1024)), "--grad_accum", ga, "--save_steps", str(max(100, int(b.get("steps", 600)) // 6))]
+    log = open(os.path.join(RUNS, name, "live", "console.log"), "w", encoding="utf-8")
+    log.write("$ " + " ".join(cmd) + "\n\n")
+    log.flush()
+    subprocess.Popen(cmd, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, env=CHILD_ENV, creationflags=NOWIN)
+    return {"name": name}
+
+
+# ================================================================================================ gather data (native dataset builder)
+@app.post("/api/builder/start")
+async def builder_start(req: Request):
+    b = await req.json()
+    name = nm(re.sub(r"[^\w.-]+", "-", (b.get("name") or "").strip()).lstrip(".") or f"data-{time.strftime('%m%d-%H%M')}")
+    out = os.path.join(ROOT, "data", name)
+    if os.path.exists(os.path.join(out, "stats.json")):
+        err(f"A dataset called '{name}' already exists - choose another name.")
+    for p in glob.glob(os.path.join(ROOT, "data", "*", "build", "status.json")):
+        st = jread(p, {}) or {}
+        if st.get("state") == "running" and hw_info._alive(st.get("pid")):
+            err("Another dataset is still being built. Wait for it to finish.")
+    s = b.get("sources") or {}
+    fmt = b.get("format", "sft")
+    if not any(_lines(s.get(k)) for k in ("files", "folders", "urls", "hf", "wikipedia", "arxiv", "github", "youtube")):
+        err("Add at least one source first - a file, a link, a topic…")
+    cmd = [sys.executable, "-u", "dataset_builder.py", "--name", name, "--overwrite", "--format", fmt, "--max_rows", str(int(b.get("max_rows", 20000))),
+           "--tokenizer", "Qwen/Qwen2.5-0.5B-Instruct", "--eval_ratio", "0.03"]
+    if b.get("system_prompt") and fmt == "sft":
+        cmd += ["--system_prompt", b["system_prompt"]]
+    for flag, key in (("--source", "files"), ("--source", "folders"), ("--url", "urls"), ("--hf", "hf"), ("--github", "github"), ("--wikipedia", "wikipedia"),
+                      ("--arxiv", "arxiv"), ("--youtube", "youtube")):
+        for v in _lines(s.get(key)):
+            cmd += [flag, v]
+    if _lines(s.get("urls")):
+        cmd += ["--crawl_depth", str(int(b.get("crawl_depth", 1))), "--max_pages", str(int(b.get("max_pages", 50))), "--sitemap"]
+    if _lines(s.get("wikipedia")):
+        cmd += ["--wiki_per_query", "15"]
+    if b.get("ocr"):
+        cmd.append("--ocr")
+    if b.get("transcribe"):
+        cmd.append("--transcribe")
+    if b.get("redact_pii"):
+        cmd.append("--redact_pii")
+    if b.get("synthetic"):
+        gen = b.get("gen_model") or "Qwen/Qwen2.5-3B-Instruct"
+        cmd += ["--synthetic", "--gen_model", gen, "--max_synth_chunks", str(int(b.get("max_synth_chunks", 300)))]
+        if "7B" in gen:
+            cmd.append("--gen_4bit")
+    os.makedirs(os.path.join(out, "build"), exist_ok=True)
+    log = open(os.path.join(out, "build", "console.log"), "w", encoding="utf-8")
+    subprocess.Popen(cmd, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, env=CHILD_ENV, creationflags=NOWIN)
+    return {"name": name}
+
+
+@app.get("/api/builder/{name}")
+def builder_status(name: str):
+    nm(name)
+    d = os.path.join(ROOT, "data", name)
+    st = jread(os.path.join(d, "build", "status.json"))
+    stats = jread(os.path.join(d, "stats.json"))
+    if not st and not stats:
+        return {"state": "starting"}
+    state = (st or {}).get("state", "done" if stats else "unknown")
+    if state == "running" and not hw_info._alive((st or {}).get("pid")):
+        state = "crashed"
+    try:
+        with open(os.path.join(d, "build", "console.log"), encoding="utf-8", errors="replace") as f:
+            tail = f.read()[-2500:]
+    except Exception:
+        tail = ""
+    import friendly_errors
+    return {"state": state, "phase": (st or {}).get("phase"), "progress": (st or {}).get("progress"), "counters": (st or {}).get("counters"),
+            "dropped": (st or {}).get("dropped"), "sources": (st or {}).get("sources"), "warnings": (st or {}).get("warnings", [])[-4:],
+            "error": (st or {}).get("error"), "help": friendly_errors.explain((st or {}).get("error") or tail if state in ("error", "crashed") else ""),
+            "stats": stats, "log": tail}
+
+
+# ================================================================================================ taste test (compare two models side by side)
+@app.get("/api/compare/options")
+def compare_options():
+    out = []
+    for r in MR.scan():
+        if not r.get("chat_ok", True):
+            continue
+        out.append({"id": r["id"], "label": r["title"], "group": "Your models"})
+        if r.get("base"):
+            out.append({"id": "base:" + r["id"], "label": f"{r['title']} - before training ({r['base'].split('/')[-1]})", "group": "Before training"})
+    return out
+
+
+def _load_spec(spec):
+    """-> (model, tok, raw). Keeps one model on the GPU at a time."""
+    import gc
+    if CHAT["id"] == spec and CHAT["model"] is not None:
+        rec = _rec(spec[5:] if spec.startswith("base:") else spec)
+        return CHAT["model"], CHAT["tok"], rec["kind"] == "pretrain" and not spec.startswith("base:")
+    CHAT.update(id=None, model=None, tok=None)
+    gc.collect()
+    import chat_llm
+    import llm_data
+    from model_ids import resolve_base
+    if spec.startswith("base:"):
+        rec = _rec(spec[5:])
+        model, tok = chat_llm.load(resolve_base(rec["base"]))
+        raw = False
+    else:
+        rec = _rec(spec)
+        model, tok = chat_llm.load(rec["path"])
+        raw = rec["kind"] == "pretrain"
+    if not raw:
+        llm_data.ensure_chat_template(tok)
+    CHAT.update(id=spec, model=model, tok=tok)
+    return model, tok, raw
+
+
+@app.post("/api/compare")
+async def compare(req: Request):
+    b = await req.json()
+    prompt = (b.get("prompt") or "").strip()
+    if not prompt:
+        err("Type a question first.")
+    sides = [("a", b["a"]), ("b", b["b"])]
+
+    def gen():
+        from threading import Thread
+        from transformers import TextIteratorStreamer
+        with CHAT_LOCK:
+            for side, spec in sides:
+                try:
+                    yield f"data: {json.dumps({'side': side, 'status': 'loading'})}\n\n"
+                    model, tok, raw = _load_spec(spec)
+                    if raw or not getattr(tok, "chat_template", None):
+                        enc = tok(prompt, return_tensors="pt").to(model.device)
+                    else:
+                        enc = tok.apply_chat_template([{"role": "user", "content": prompt}], add_generation_prompt=True, return_tensors="pt", return_dict=True).to(model.device)
+                    stream = TextIteratorStreamer(tok, skip_prompt=True, skip_special_tokens=True)
+                    t0 = time.time()
+                    Thread(target=model.generate, kwargs=dict(**enc, streamer=stream, max_new_tokens=int(b.get("max_new_tokens", 260)), do_sample=True,
+                                                              temperature=0.7, top_p=0.9, pad_token_id=tok.pad_token_id or tok.eos_token_id)).start()
+                    n = 0
+                    for chunk in stream:
+                        n += 1
+                        yield f"data: {json.dumps({'side': side, 't': chunk})}\n\n"
+                    yield f"data: {json.dumps({'side': side, 'done': True, 'seconds': round(time.time() - t0, 1), 'chunks': n})}\n\n"
+                except Exception as e:
+                    yield f"data: {json.dumps({'side': side, 'error': str(e)[:300]})}\n\n"
+            yield f"data: {json.dumps({'finished': True})}\n\n"
+    return StreamingResponse(gen(), media_type="text/event-stream")
+
+
 # ================================================================================================ classic Gradio studio (advanced tools)
 CLASSIC = {"state": "loading", "error": None}
 
@@ -748,7 +1001,7 @@ def _mount_classic():
         def rd(n):
             p = os.path.join(here, n)
             return open(p, encoding="utf-8").read() if os.path.exists(p) else ""
-        css = "\n".join([rd("studio_theme.css"), classic.live_dashboard.CSS, classic.quickstart_tab.CSS, rd("redesign.css")])
+        css = "\n".join([rd("studio_theme.css"), classic.live_dashboard.CSS, classic.quickstart_tab.CSS, rd("redesign.css"), rd("classic_cute.css")])
         before = len(app.router.routes)
         gr.mount_gradio_app(app, classic.demo, path="/classic", css=css, js="() => { document.body.classList.add('dark'); }",
                             theme=gr.themes.Default(primary_hue="indigo", secondary_hue="cyan", neutral_hue="slate"),

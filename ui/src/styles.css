@@ -499,3 +499,43 @@ pre.log { background: var(--bg-2); border: 1.5px solid var(--border); border-rad
 .hat-btn:not(:disabled):hover { transform: translateY(-3px) rotate(-2deg); } .hat-btn.on { border-color: var(--accent); background: var(--accent-soft); } .hat-btn:disabled { opacity: .5; cursor: not-allowed; }
 .mascot .m-hat { transform-box: fill-box; transform-origin: 50% 100%; animation: hat-bob 3.2s ease-in-out infinite; }
 @keyframes hat-bob { 50% { transform: rotate(2.5deg) translateY(-1px); } }
+/* ============================================================ fun + easy: recipes, data kitchen, workshop, taste test, palette, adventures ============================================================ */
+.recipes { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+.recipe { display: flex; flex-direction: column; gap: 3px; text-align: left; padding: 14px 16px; border-radius: 20px; background: var(--surface); border: 2px solid var(--border); cursor: pointer; transition: transform .2s cubic-bezier(.3, 1.6, .5, 1), border-color .15s; color: inherit; }
+.recipe:hover { transform: translateY(-3px) rotate(-.6deg); border-color: var(--accent); background: var(--surface-2); }
+.recipe span { font-size: 28px; line-height: 1.1; } .recipe b { font-family: var(--font-head); font-weight: 600; font-size: 16px; } .recipe small { font-size: 12.5px; color: var(--muted); font-weight: 600; line-height: 1.35; }
+.recipe-row { margin-bottom: 22px; } .small-recipes { grid-template-columns: repeat(2, 1fr); } .small-recipes .recipe { padding: 10px 12px; } .small-recipes .recipe small { display: none; }
+.quests .hearts { display: flex; gap: 6px; font-size: 22px; margin-bottom: 12px; } .quests .hearts span { transition: transform .3s cubic-bezier(.3, 1.8, .5, 1); } .quests .hearts span.on { animation: heartbeat 2s ease-in-out infinite; }
+.quest-list { display: grid; gap: 6px; }
+.quest { display: flex; align-items: center; gap: 12px; padding: 9px 14px; border-radius: 16px; background: var(--surface-2); font-weight: 700; transition: .2s; color: inherit; }
+.quest:hover { transform: translateX(4px); background: var(--surface-3); } .quest.done { opacity: .6; text-decoration: line-through; text-decoration-color: var(--faint); } .quest .qe { font-size: 20px; width: 26px; text-align: center; }
+
+.ask-boi { display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 14px; margin-bottom: 4px; border-radius: 999px; background: var(--surface); border: 1.5px dashed var(--border-2); color: var(--muted); font-weight: 700; cursor: pointer; transition: .2s; }
+.ask-boi:hover { color: var(--text); border-style: solid; border-color: var(--accent); background: var(--accent-soft); }
+.ask-boi kbd { margin-left: auto; font: 700 11px var(--font); padding: 2px 8px; border-radius: 8px; background: var(--surface-3); color: var(--faint); }
+.palette-back { position: fixed; inset: 0; z-index: 95; background: rgba(15, 10, 40, .5); backdrop-filter: blur(4px); display: grid; place-items: start center; padding-top: 12vh; animation: fade .2s both; }
+@keyframes fade { from { opacity: 0; } }
+.palette { width: min(600px, 92vw); background: var(--surface); border: 1.5px solid var(--border-2); border-radius: 28px; box-shadow: 0 30px 80px rgba(8, 4, 30, .5); overflow: hidden; animation: speech-in .35s cubic-bezier(.3, 1.4, .5, 1) both; transform-origin: top center; }
+.palette-head { display: flex; align-items: center; gap: 12px; padding: 16px 22px 6px; } .palette-head b { font-family: var(--font-head); font-size: 18px; font-weight: 600; }
+.palette-input { display: flex; align-items: center; gap: 10px; margin: 8px 18px; padding: 0 16px; border-radius: 999px; background: var(--bg-2); border: 1.5px solid var(--border-2); color: var(--muted); }
+.palette-input:focus-within { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+.palette-input input { border: none !important; box-shadow: none !important; background: transparent !important; padding: 12px 0; font-size: 16px; }
+.palette-list { max-height: 340px; overflow: auto; padding: 4px 12px 8px; display: flex; flex-direction: column; gap: 2px; }
+.palette-list button { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 16px; border: none; background: transparent; cursor: pointer; text-align: left; font-weight: 700; }
+.palette-list button.on { background: var(--accent-soft); } .palette-list .pe { font-size: 20px; width: 28px; text-align: center; } .palette-list .pl { flex: 1; } .palette-list small { color: var(--faint); font-weight: 700; }
+.palette-foot { padding: 8px 22px 14px; text-align: center; }
+
+.kitchen { display: flex; gap: 22px; align-items: flex-start; }
+.pot { position: relative; flex: none; padding-top: 18px; } .pot-steam { position: absolute; top: -4px; left: 28px; display: flex; gap: 10px; }
+.pot-steam i { width: 10px; height: 22px; border-radius: 99px; background: var(--surface-3); opacity: 0; animation: steam 2.2s ease-in-out infinite; } .pot-steam i:nth-child(2) { animation-delay: .5s; } .pot-steam i:nth-child(3) { animation-delay: 1s; }
+@keyframes steam { 0% { opacity: 0; transform: translateY(8px) scaleY(.6); } 40% { opacity: .8; } 100% { opacity: 0; transform: translateY(-16px) scaleY(1.3); } }
+
+.method-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; margin-top: 8px; }
+.method { text-align: left; display: flex; flex-direction: column; gap: 6px; padding: 16px; border-radius: 22px; background: var(--surface); border: 2px solid var(--border); cursor: pointer; transition: transform .2s cubic-bezier(.3, 1.6, .5, 1), border-color .15s; color: inherit; }
+.method:hover { transform: translateY(-3px) rotate(-.4deg); border-color: var(--border-2); } .method.on { border-color: var(--accent); background: var(--accent-soft); }
+.method h4 { font-size: 16px; } .method p { font-size: 13.5px; color: var(--muted); font-weight: 600; } .method-more { display: grid; gap: 4px; margin-top: 6px; padding-top: 8px; border-top: 1.5px dashed var(--border-2); color: var(--text); font-weight: 600; }
+.quiz > .field { flex: 1; min-width: 220px; }
+
+.plate { display: flex; flex-direction: column; gap: 12px; padding: 18px; border-radius: 26px; background: var(--surface); border: 2px solid var(--border); box-shadow: var(--shadow); min-height: 240px; transition: .3s; }
+.plate.win { border-color: var(--pink); background: color-mix(in srgb, var(--pink) 10%, var(--surface)); transform: scale(1.015); }
+.plate-body { flex: 1; white-space: pre-wrap; font-weight: 600; line-height: 1.55; }

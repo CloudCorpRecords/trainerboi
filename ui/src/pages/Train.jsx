@@ -5,6 +5,7 @@ import { j, post, usePoll, toast } from '../api'
 import { Button, Card, Chip, Field, PageHeader, Md } from '../ui'
 import { Mascot } from '../mascot'
 import { useCompanion } from '../companion'
+import { RECIPES, cuteName } from '../recipes'
 
 const EMOJI = { docs: '📄', persona: '💬', instruct: '🧠', code: '💻', prefer: '⚖️', scratch: '🧱' }
 const SRC_LABEL = { urls: 'Website', hf: 'Hugging Face', wikipedia: 'Wikipedia', arxiv: 'Papers', github: 'GitHub', youtube: 'YouTube', folders: 'On this PC' }
@@ -44,6 +45,7 @@ export default function Train() {
   const [starting, setStarting] = useState(false)
   const [over, setOver] = useState(false)
   const [adv, setAdv] = useState(false)
+  const [recipe, setRecipe] = useState(null)
   const fileRef = useRef(null)
   const { say } = useCompanion()
   useEffect(() => {
@@ -52,6 +54,14 @@ export default function Train() {
   }, [step])
 
   const g = meta?.goals.find((x) => x.key === goal)
+  useEffect(() => {      // arriving from a recipe card: fill things in for the person
+    const id = params.get('recipe')
+    const r = RECIPES.find((x) => x.id === id)
+    if (!r || r.link) return
+    setRecipe(r); setGoal(r.goal); setEffort(r.effort || 'balanced'); if (r.persona) setPersona(r.persona)
+    setStep(r.needs ? 1 : 2)
+    say(`${r.emoji} ${r.title} — good choice!`, 'happy', 4500)
+  }, [params.get('recipe')])
   const hasData = files.length > 0 || Object.values(src).some((a) => a.length) || !!dataset
   const needs = g?.needs === 'files' && !hasData
 
@@ -95,7 +105,7 @@ export default function Train() {
   const start = async () => {
     setStarting(true)
     try {
-      const r = await post('/api/guided/start', { goal, effort, files: files.map((f) => f.path), ...src, persona, model, name, dataset })
+      const r = await post('/api/guided/start', { goal, effort, files: files.map((f) => f.path), ...src, persona, model, name: name.trim() || cuteName(), dataset })
       nav(`/run/${encodeURIComponent(r.name)}`)
     } catch (e) { toast(e.message, 'error'); setStarting(false) }
   }
@@ -109,7 +119,14 @@ export default function Train() {
       <PageHeader title="Teach a model" sub="Three gentle steps. We'll pick the model and every setting for you — and you can change anything you like." />
       <Steps step={step} />
 
+      {recipe && step > 0 && <div className="callout" style={{ marginBottom: 16, alignItems: 'center' }}><Mascot mood="happy" size={42} /><div><b>{recipe.emoji} Recipe: {recipe.title}.</b> {recipe.needs || 'Everything is filled in — you can still change anything.'}</div></div>}
       {step === 0 && (
+        <>
+        <div className="recipe-row">
+          <div className="small muted" style={{ marginBottom: 8, fontWeight: 800 }}>✨ Or start from a recipe — one click and it's filled in</div>
+          <div className="recipes">{RECIPES.map((r) => (r.link ? <a key={r.id} className="recipe" href={`#${r.link}`}><span>{r.emoji}</span><b>{r.title}</b><small>{r.blurb}</small></a>
+            : <button key={r.id} className="recipe" onClick={() => { setRecipe(r); setGoal(r.goal); setEffort(r.effort || 'balanced'); setPersona(r.persona || ''); setStep(r.needs ? 1 : 2) }}><span>{r.emoji}</span><b>{r.title}</b><small>{r.blurb}</small></button>))}</div>
+        </div>
         <div className="goal-grid">
           {meta.goals.map((x) => {
             return (
@@ -119,6 +136,7 @@ export default function Train() {
             )
           })}
         </div>
+        </>
       )}
 
       {step === 1 && (
@@ -204,7 +222,7 @@ export default function Train() {
             {adv && (
               <div className="grid g2" style={{ marginTop: 10 }}>
                 <Field label="Base model"><select value={model} onChange={(e) => setModel(e.target.value)}>{meta.models.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}</select></Field>
-                <Field label="Run name"><input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="auto" /></Field>
+                <Field label="Run name" hint="Leave empty for a surprise name 🎲"><input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="a surprise…" /></Field>
               </div>
             )}
           </div>

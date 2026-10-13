@@ -111,8 +111,9 @@ export default function Run() {
       )}
       {ap?.data_quality && <div className="callout" style={{ marginBottom: 16 }}><Lightbulb size={16} /><span>Data quality <b>{ap.data_quality.grade}</b> ({Math.round(ap.data_quality.health)}/100){ap.data_quality.top_issue ? ` — ${ap.data_quality.top_issue}` : ''}</span></div>}
 
-      {ap && <Journey steps={ap.steps} state={r.state} progress={r.state === 'done' ? 1 : journey(ap, r.sub, live)} hot={g?.temp >= 80}
-        label={r.state === 'done' ? 'We made it home! 🏡' : r.state === 'error' || r.state === 'crashed' ? 'A little rain, but we\'ll be fine ☔' : (ap.steps.find((s) => s.state === 'running') || {}).title} />}
+      {(ap || live) && <Journey steps={ap ? ap.steps : [{ id: 'train', state: r.state === 'done' ? 'done' : r.state === 'running' ? 'running' : 'pending' }]} state={r.state}
+        progress={r.state === 'done' ? 1 : ap ? journey(ap, r.sub, live) : live?.max_steps ? live.step / live.max_steps : 0.05} hot={g?.temp >= 80}
+        label={r.state === 'done' ? 'We made it home! 🏡' : r.state === 'error' || r.state === 'crashed' ? 'A little rain, but we\'ll be fine ☔' : ap ? (ap.steps.find((s) => s.state === 'running') || {}).title : live?.phase} />}
       <div className="grid" style={{ gridTemplateColumns: '300px 1fr', alignItems: 'start' }}>
         <Card title="The journey 🗺️">
           {ap ? <Timeline ap={ap} sub={r.sub} live={live} /> : (

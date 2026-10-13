@@ -38,6 +38,10 @@ RULES = [
      "Your data isn't in a format this method understands",
      "Use the Dataset Builder (or Guided training) to convert it - it accepts almost any file. For preference methods you need "
      "'chosen' and 'rejected' answers; for fine-tuning you need question/answer or chat data."),
+    ("filtered", r"Every record was filtered out|No usable (text|data|examples)",
+     "Nothing usable was left after tidying",
+     "Every piece of your data was filtered out as too short, repeated, garbled or off-format. Try more (or more varied) text, a different kind of example, "
+     "or - for plain documents - let the helper AI turn them into questions and answers."),
     ("tokenizer", r"chat_template|apply_chat_template|Tokenizer .* has no|pad_token",
      "The model's chat format couldn't be applied",
      "This base model has no chat template. Pick an *-Instruct* version of the model, or use a different model."),

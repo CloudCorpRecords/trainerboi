@@ -1,8 +1,36 @@
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowRight } from 'lucide-react'
 import { useHardware, usePoll, fmt } from '../api'
 import { Card, Chip, Stat, Empty, Num } from '../ui'
 import { Garden } from '../garden'
+import { RECIPES } from '../recipes'
+import { earned } from '../rewards'
+
+const QUESTS = [
+  { id: 'first_model', e: '🌱', t: 'Teach your first model', to: '/train' }, { id: 'math', e: '🧮', t: 'Try the Math playground', to: '/math' },
+  { id: 'gathered', e: '🥣', t: 'Gather some data in the kitchen', to: '/gather' }, { id: 'chatted', e: '💬', t: 'Chat with a model you made', to: '/models' },
+  { id: 'taste', e: '🍰', t: 'Run a taste test', to: '/taste' }, { id: 'cleaned', e: '🧹', t: 'Tidy up a dataset', to: '/data' }, { id: 'shared', e: '🎁', t: 'Share a model with a friend', to: '/models' },
+]
+
+function Adventures() {
+  const [got, setGot] = useState(earned())
+  useEffect(() => { const h = () => setGot(earned()); window.addEventListener('tb-earned', h); return () => window.removeEventListener('tb-earned', h) }, [])
+  const done = QUESTS.filter((q) => got[q.id]).length
+  const all = done === QUESTS.length
+  return (
+    <Card title={all ? 'Little adventures — all complete! 🌈' : `Little adventures · ${done} of ${QUESTS.length}`} className="quests">
+      <div className="hearts">{QUESTS.map((q) => <span key={q.id} className={got[q.id] ? 'on' : ''}>{got[q.id] ? '💜' : '🤍'}</span>)}</div>
+      <div className="quest-list">
+        {QUESTS.map((q) => (
+          <Link key={q.id} to={q.to} className={`quest ${got[q.id] ? 'done' : ''}`}><span className="qe">{got[q.id] ? '✅' : q.e}</span><span>{q.t}</span></Link>
+        ))}
+      </div>
+      <div className="small faint" style={{ marginTop: 10 }}>Each one earns a sticker — and some unlock hats for Boi. No rush at all. 🌿</div>
+    </Card>
+  )
+}
+
 import { Sparkline } from '../charts'
 import { Mascot, Sky, Track, tempMood } from '../mascot'
 import { jobLink } from '../App'
@@ -67,6 +95,14 @@ export default function Home() {
         <Link to="/math" className="action"><div className="ico">🧮</div><h4>Math playground</h4><p>Practice problems that check themselves — no data needed.</p></Link>
         <Link to="/data" className="action"><div className="ico">🌱</div><h4>My data</h4><p>See how healthy your examples are and tidy them up.</p></Link>
         <Link to="/models" className="action"><div className="ico">💬</div><h4>My little models</h4><p>Say hello to what you've made, then share it with friends.</p></Link>
+      </div>
+
+      <div className="grid g2" style={{ gridTemplateColumns: '1.1fr 1fr', marginBottom: 16 }}>
+        <Adventures />
+        <Card title="Start from a recipe ✨">
+          <div className="recipes small-recipes">{RECIPES.slice(0, 6).map((r) => (
+            <Link key={r.id} className="recipe" to={r.link || `/train?recipe=${r.id}`}><span>{r.emoji}</span><b>{r.title}</b><small>{r.blurb}</small></Link>))}</div>
+        </Card>
       </div>
 
       <Card title="Your garden 🌷 — one flower for every model you've taught" className="garden-card">

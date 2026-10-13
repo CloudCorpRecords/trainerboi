@@ -44,6 +44,14 @@ A native-feeling desktop app (Electron + React) on top of a Python backend. Ever
 | **Advanced tools** | The full classic studio embedded: dataset builder + library, AI generator, manual training with every setting, methods guide, auto-tune, compare, export (GGUF/Ollama), AutoTrain, classic trainers, RAG, audio. |
 | **Settings & health** | Safety pause temperature, GPU health check (finds hot-GPU calculation errors), computer facts. |
 
+### Fun and easy extras
+
+* **Recipes** - one click fills in a whole training (Pirate buddy, Study buddy, Code explainer, Trivia whiz, Bedtime storyteller…), and runs get silly names like `fluffy-otter-42`.
+* **Gather data** (the data kitchen) - drop files or paste links / repos / datasets / a topic; watch it cook; one click to check its health or teach a model with it.
+* **Workshop** - every training method (SFT, LoRA, DPO, ORPO, KTO, RL, from scratch) with a friendly picker, a 'which one?' quiz, 'suggest cozy settings', and every knob.
+* **Taste test** - ask two models the same question side by side, including a model against its own before-training self.
+* **Ask Boi** (`Ctrl K`) - type what you want ('math', 'pirate', 'share', 'joke') and jump straight there; plus *Little adventures* - a gentle checklist that earns stickers and hats.
+
 Architecture: `studio_server.py` (FastAPI) serves `ui/dist` (React, built with Vite), a JSON API over the existing Python modules, and mounts the classic
 Gradio studio at `/classic`. `hw_info.py` is the torch-free hardware/job monitor that keeps the status readings fresh and accurate.
 Develop the UI with `cd ui && npm install && npm run dev` (proxies the API to :7860); build it with `npm run build`.

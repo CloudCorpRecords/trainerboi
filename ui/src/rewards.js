@@ -9,11 +9,15 @@ export const STICKERS = [
   { id: 'cleaned', emoji: '🧹', title: 'Tidy helper', how: 'Make a tidied-up copy of a dataset', hat: 'sparkle' },
   { id: 'poked', emoji: '💜', title: 'Best friends', how: 'Give Boi ten happy clicks', hat: 'bow' },
   { id: 'night_owl', emoji: '🌙', title: 'Night owl', how: 'Visit after midnight', hat: 'nightcap' },
+  { id: 'gathered', emoji: '🥣', title: 'Little chef', how: 'Gather a batch of data in the data kitchen', hat: 'chef' },
+  { id: 'workshop', emoji: '🔧', title: 'Tinkerer', how: 'Start a run from the Workshop', hat: 'hardhat' },
+  { id: 'taste', emoji: '🍰', title: 'Fine taste', how: 'Vote in a taste test', hat: 'tophat' },
 ]
 export const HATS = [
   { id: 'none', label: 'No hat', emoji: '🚂' }, { id: 'party', label: 'Party hat', emoji: '🎉' }, { id: 'flowers', label: 'Flower crown', emoji: '🌼' },
   { id: 'glasses', label: 'Smart glasses', emoji: '🤓' }, { id: 'headphones', label: 'Headphones', emoji: '🎧' }, { id: 'crown', label: 'Little crown', emoji: '👑' },
   { id: 'sparkle', label: 'Sparkle tiara', emoji: '✨' }, { id: 'bow', label: 'Big bow', emoji: '🎀' }, { id: 'nightcap', label: 'Night cap', emoji: '🌛' },
+  { id: 'chef', label: 'Chef hat', emoji: '👨‍🍳' }, { id: 'hardhat', label: 'Hard hat', emoji: '⛑️' }, { id: 'tophat', label: 'Top hat', emoji: '🎩' },
 ]
 
 const KEY = 'tb-stickers'
