@@ -19,7 +19,7 @@ installs Python + the matching PyTorch for you (5-15 min, one time). Windows may
 **From source** (needs [uv](https://docs.astral.sh/uv/) and Node 20+; an NVIDIA GPU is strongly recommended):
 
 ```powershell
-git clone https://github.com/<you>/trainerboi.git
+git clone https://github.com/CloudCorpRecords/trainerboi.git
 cd trainerboi
 setup.bat        # Python 3.11 env + PyTorch for your GPU + libraries + UI
 START.bat        # opens http://127.0.0.1:7860     (or launch_desktop.bat for the Electron app)
