@@ -4,6 +4,7 @@ import { Check, Circle, Loader2, X, Square, RotateCcw, MessageCircle, Share2, Sn
 import { post, usePoll, useHardware, fmt, toast } from '../api'
 import { Button, Card, Chip, Progress, Stat, PageHeader, Md } from '../ui'
 import { Mascot, Track, Confetti } from '../mascot'
+import { Journey } from '../scene'
 import { useCompanion } from '../companion'
 import { LineChart, smooth } from '../charts'
 
@@ -110,8 +111,8 @@ export default function Run() {
       )}
       {ap?.data_quality && <div className="callout" style={{ marginBottom: 16 }}><Lightbulb size={16} /><span>Data quality <b>{ap.data_quality.grade}</b> ({Math.round(ap.data_quality.health)}/100){ap.data_quality.top_issue ? ` — ${ap.data_quality.top_issue}` : ''}</span></div>}
 
-      {ap && <Track value={r.state === 'done' ? 1 : journey(ap, r.sub, live)} mood={r.state === 'done' ? 'cheer' : r.state === 'error' || r.state === 'crashed' ? 'oops' : g?.temp >= 80 ? 'toasty' : 'working'}
-        label={r.state === 'done' ? 'We made it! 🌸' : (ap.steps.find((s) => s.state === 'running') || {}).title}/>}
+      {ap && <Journey steps={ap.steps} state={r.state} progress={r.state === 'done' ? 1 : journey(ap, r.sub, live)} hot={g?.temp >= 80}
+        label={r.state === 'done' ? 'We made it home! 🏡' : r.state === 'error' || r.state === 'crashed' ? 'A little rain, but we\'ll be fine ☔' : (ap.steps.find((s) => s.state === 'running') || {}).title} />}
       <div className="grid" style={{ gridTemplateColumns: '300px 1fr', alignItems: 'start' }}>
         <Card title="The journey 🗺️">
           {ap ? <Timeline ap={ap} sub={r.sub} live={live} /> : (

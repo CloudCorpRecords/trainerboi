@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
-import { Home as HomeIcon, Sparkles, Calculator, Database, Trophy, Wrench, HeartPulse, Lock, Moon, Sun, Bell, BellOff } from 'lucide-react'
-import { useHardware, getTheme, applyTheme } from './api'
+import { Home as HomeIcon, Sparkles, Calculator, Database, Trophy, Wrench, HeartPulse, Lock, Moon, Sun, Bell, BellOff, Star, Wand2 } from 'lucide-react'
+import { useHardware, getTheme, applyTheme, usePoll } from './api'
 import { Chip, Toasts, Progress } from './ui'
 import { Mascot, tempMood } from './mascot'
 import { Sparkline } from './charts'
 import { CompanionProvider } from './companion'
 import { installSparkles } from './effects'
 import { soundOn, setSound, pop } from './sound'
+import { PixieDust, dustOn, setDust } from './pixie'
+import { earn } from './rewards'
+import Stickers from './pages/Stickers'
 import Home from './pages/Home'
 import Train from './pages/Train'
 import Run from './pages/Run'
@@ -26,6 +29,7 @@ const NAV = [
   { to: '/data', label: 'My data', icon: Database },
   { section: 'Play' },
   { to: '/models', label: 'My little models', icon: Trophy },
+  { to: '/stickers', label: 'Sticker book', icon: Star },
   { section: 'Cozy corner' },
   { to: '/advanced', label: 'Toolbox', icon: Wrench },
   { to: '/settings', label: 'Care & comfort', icon: HeartPulse },
@@ -74,9 +78,11 @@ function SideGpu() {
 function ThemeToggle() {
   const [t, setT] = useState(getTheme())
   const [snd, setSnd] = useState(soundOn())
+  const [dust, setDu] = useState(dustOn())
   const set = (v) => { applyTheme(v); setT(v) }
   return (
     <div className="theme-toggle">
+      <button className={`bell ${dust ? 'on' : ''}`} title={dust ? 'Pixie dust is on' : 'Sprinkle some pixie dust'} onClick={() => { const v = !dust; setDust(v); setDu(v) }}><Wand2 size={13} /></button>
       <button className={`bell ${snd ? 'on' : ''}`} title={snd ? 'Little sounds are on' : 'Turn on little sounds'} onClick={() => { const v = !snd; setSound(v); setSnd(v); if (v) pop() }}>{snd ? <Bell size={13} /> : <BellOff size={13} />}</button>
       <button className={t === 'dusk' ? 'on' : ''} onClick={() => set('dusk')}><Moon size={12} style={{ verticalAlign: -1 }} /> Night</button>
       <button className={t === 'dawn' ? 'on' : ''} onClick={() => set('dawn')}><Sun size={12} style={{ verticalAlign: -1 }} /> Day</button>
@@ -89,8 +95,21 @@ export default function App() {
   const loc = useLocation()
   const busy = !!hw?.jobs?.some((j) => j.kind !== 'data')
   useEffect(() => installSparkles(), [])
+  const { data: models } = usePoll('/api/models', 10000)
+  const { data: mathRuns } = usePoll('/api/math/runs', 15000)
+  useEffect(() => {          // stickers for real milestones
+    earn('hello')
+    if (new Date().getHours() < 5) earn('night_owl')
+  }, [])
+  useEffect(() => {
+    const n = (models || []).filter((m) => m.status === 'done' && m.kind !== 'embedding').length
+    if (n >= 1) earn('first_model')
+    if (n >= 3) earn('three_models')
+  }, [models])
+  useEffect(() => { if ((mathRuns || []).some((r) => r.state === 'done')) earn('math') }, [mathRuns])
   return (
     <CompanionProvider>
+    <PixieDust />
     <div className="app">
       <div className="titlebar">
         <div className="brand" onClick={() => document.querySelector('.boi-btn')?.click()} title="Say hi to Boi"><Mascot mood="happy" size={30} />TrainerBoi</div>
@@ -118,6 +137,7 @@ export default function App() {
             <Route path="/run/:name" element={<Run />} />
             <Route path="/models" element={<Models />} />
             <Route path="/models/:id" element={<ModelDetail />} />
+            <Route path="/stickers" element={<Stickers />} />
             <Route path="/math" element={<MathLab />} />
             <Route path="/data" element={<Data />} />
             <Route path="/advanced" element={<Advanced />} />

@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { burst } from './effects'
 
 // petal colour per kind of model
 const PETAL = { sft: '#ff9ecb', pretrain: '#ffd36b', math: '#8ee6c4', dpo: '#b9a5ff', orpo: '#b9a5ff', kto: '#b9a5ff', grpo: '#ffab7d', exported: '#8fd3ff', embedding: '#ffab7d' }
@@ -30,7 +31,8 @@ export function Garden({ models }) {
       <span className="g-butterfly" aria-hidden="true">🦋</span>
       <div className="g-row">
         {list.map((m, i) => (
-          <Link key={m.id} to={`/models/${encodeURIComponent(m.id)}`} className="g-spot" title={`${m.title} — ${m.metric || m.goal || ''}`}>
+          <Link key={m.id} to={`/models/${encodeURIComponent(m.id)}`} className="g-spot" title={`${m.title} — ${m.metric || m.goal || ''}`}
+            onMouseEnter={(e) => { const r = e.currentTarget.getBoundingClientRect(); burst(r.left + r.width / 2, r.top + 24, ['🌼', '✨', '🌸'], 5) }}>
             <Flower color={PETAL[m.kind] || '#ff9ecb'} delay={(i % 5) * 0.35} tall={i % 3 === 0} />
             <span className="g-name">{m.title}</span>
           </Link>

@@ -6,6 +6,7 @@ import { Button, Card, Chip, Field, PageHeader, Tabs, Progress } from '../ui'
 import { KIND } from './Models'
 import { Mascot } from '../mascot'
 import { useCompanion } from '../companion'
+import { earn } from '../rewards'
 
 function Chat({ rec }) {
   const [msgs, setMsgs] = useState([])
@@ -26,7 +27,7 @@ function Chat({ rec }) {
     try {
       await sse('/api/chat', { model_id: rec.id, messages: history }, (e) => {
         if (e.status === 'loading') setLoading(true)
-        if (e.t) { setLoading(false); setMsgs((m) => { const c = [...m]; c[c.length - 1] = { role: 'assistant', content: c[c.length - 1].content + e.t }; return c }) }
+        if (e.t) { earn('chatted'); setLoading(false); setMsgs((m) => { const c = [...m]; c[c.length - 1] = { role: 'assistant', content: c[c.length - 1].content + e.t }; return c }) }
         if (e.error) toast(e.error, 'error')
       }, ctl.current.signal)
     } catch (e) { if (e.name !== 'AbortError') toast(e.message, 'error') }
@@ -81,6 +82,8 @@ function Share({ rec }) {
   const [priv, setPriv] = useState(true)
   const [token, setToken] = useState('')
   const { data: share, reload } = usePoll('/api/share', 2500)
+  useEffect(() => { if (zipJob?.state === 'done') { earn('shared') } }, [zipJob?.state])
+  useEffect(() => { if (pubJob?.state === 'done' || share?.state === 'live') earn('shared') }, [pubJob?.state, share?.state])
   useEffect(() => { if (zipJob?.state === 'done') say('Wrapped up with a bow! 🎁 Send it to someone you like.', 'love', 9000) }, [zipJob?.state])
   useEffect(() => { if (pubJob?.state === 'done') say('Published! Your little model is out in the world. 💜', 'love', 9000) }, [pubJob?.state])
   useEffect(() => { if (share?.state === 'live') say('Your link is live! Friends can say hello now. 💜', 'love', 9000) }, [share?.state])

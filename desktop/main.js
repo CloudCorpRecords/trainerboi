@@ -34,12 +34,16 @@ const pythonPath = () => (useDevVenv() ? devVenvPy() : pyExe());
 const appDir = () => (IS_DEV ? DEV_ROOT : WORK_DIR);
 
 // ---------------------------------------------------------------- helpers
+// A stable port matters: the browser keeps your theme, stickers and Boi's hat per address (including the port), so a random port
+// each launch would make them vanish. Prefer a fixed one and only fall back to a random free port if it is taken.
+const PREFERRED_PORT = 47860;
 function freePort() {
-  return new Promise((resolve, reject) => {
+  const tryListen = (p) => new Promise((resolve, reject) => {
     const s = net.createServer();
-    s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => resolve(p)); });
-    s.on('error', reject);
+    s.once('error', reject);
+    s.listen(p, '127.0.0.1', () => { const got = s.address().port; s.close(() => resolve(got)); });
   });
+  return tryListen(PREFERRED_PORT).catch(() => tryListen(0));
 }
 
 function waitForServer(p, timeoutMs = 180000) {

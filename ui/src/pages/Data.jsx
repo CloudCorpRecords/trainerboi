@@ -5,6 +5,8 @@ import { j, post, usePoll, useJob, toast, fmt } from '../api'
 import { Button, Card, Chip, Empty, Field, PageHeader, Progress } from '../ui'
 import { Bars } from '../charts'
 import { Mascot } from '../mascot'
+import { Friend } from '../friends'
+import { earn } from '../rewards'
 
 const GRADE = { A: '#3ecf8e', B: '#9bd34a', C: '#f5a524', D: '#ff8a3d', F: '#f0556a' }
 const SEV = { high: 'bad', medium: 'warn', low: 'neutral' }
@@ -28,14 +30,15 @@ function Detail({ ds, onChange }) {
 
   const analyze = async () => { try { const r = await post(`/api/datasets/${encodeURIComponent(ds.name)}/analyze`); follow(r.job) } catch (e) { toast(e.message, 'error') } }
   const clean = async () => {
-    try { const r = await post(`/api/datasets/${encodeURIComponent(ds.name)}/clean`, { out, drop, dedup, min_score: minScore }); toast(`Creating “${r.name}”… your original is untouched.`, 'success'); setTimeout(onChange, 4000) }
+    try { const r = await post(`/api/datasets/${encodeURIComponent(ds.name)}/clean`, { out, drop, dedup, min_score: minScore }); toast(`Creating “${r.name}”… your original is untouched.`, 'success'); earn('cleaned'); setTimeout(onChange, 4000) }
     catch (e) { toast(e.message, 'error') }
   }
   return (
     <div className="stack">
       <Card>
         <div className="row spread">
-          <div className="row" style={{ gap: 16 }}><Grade g={a?.grade || ds.grade} /><div><h3 style={{ fontSize: 18 }}>{ds.name}</h3>
+          <div className="row" style={{ gap: 16 }}><Friend who="bunny" size={84} mood={['A', 'B'].includes(a?.grade || ds.grade) ? 'cheer' : ['D', 'F'].includes(a?.grade || ds.grade) ? 'oops' : 'happy'}
+            quip={!(a?.grade || ds.grade) ? 'Shall we take a look?' : ['A', 'B'].includes(a?.grade || ds.grade) ? 'These look lovely!' : ['D', 'F'].includes(a?.grade || ds.grade) ? 'A little tidying will help!' : 'Pretty good — a few things to tidy.'} /><Grade g={a?.grade || ds.grade} /><div><h3 style={{ fontSize: 18 }}>{ds.name}</h3>
             <div className="muted small">{fmt.n(ds.train)} training · {fmt.n(ds.eval)} test examples · {ds.format}{ds.tokens ? ` · ${(ds.tokens / 1e6).toFixed(1)}M tokens` : ''}</div>
             {a && <div className="small faint">Health {Math.round(a.health)}/100 · checked {fmt.n(a.sampled)} examples</div>}</div></div>
           <Button icon={Stethoscope} variant="primary" onClick={analyze} disabled={job?.state === 'running'}>{job?.state === 'running' ? 'Taking a look…' : a ? 'Check again' : 'Check its health'}</Button>

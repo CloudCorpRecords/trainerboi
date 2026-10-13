@@ -5,6 +5,7 @@ import { post, usePoll, toast, fmt } from '../api'
 import { Button, Card, Chip, Field, PageHeader, Progress, Stat, Md } from '../ui'
 import { Bars, LineChart } from '../charts'
 import { Mascot } from '../mascot'
+import { Friend } from '../friends'
 
 const MODELS = [['Qwen/Qwen2.5-0.5B-Instruct', 'Qwen2.5 0.5B — fastest'], ['Qwen/Qwen2.5-1.5B-Instruct', 'Qwen2.5 1.5B'], ['Qwen/Qwen2.5-3B-Instruct', 'Qwen2.5 3B']]
 const tone = { running: 'info', done: 'ok', error: 'bad', crashed: 'bad', stopped: 'neutral' }
@@ -30,6 +31,8 @@ export default function MathLab() {
 
   return (
     <div className="page">
+      <div className="owl-corner"><Friend who="owl" size={92} mood={running ? 'think' : d?.state === 'done' ? 'cheer' : 'happy'}
+          quip={running ? 'Hmm, let me think… 🤔' : d?.state === 'done' ? (rounds.length > 1 && now.overall > base.overall ? 'Splendid! Top marks! 🎉' : 'Well practised!') : 'Care to practise some sums?'} /></div>
       <PageHeader title="Math playground 🧮" sub="No homework to collect! The model practises endless problems that check themselves, keeps only the answers that are proven right, and learns from those — just like a student with a friendly answer key." />
       <div className="grid" style={{ gridTemplateColumns: '320px 1fr', alignItems: 'start' }}>
         <div className="stack">

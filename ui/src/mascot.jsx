@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { getHat } from './rewards'
+import { LOADING, pick } from './phrases'
 
 // ---------------------------------------------------------------- eyes that follow the pointer (one shared listener)
 const watchers = new Set()
@@ -16,8 +18,11 @@ function startListening() {
 }
 
 /** "Boi" - the little train. Moods: happy, working, sleepy, toasty, cheer, oops, think, love. Pure SVG + CSS, themed by --m-* variables. */
-export function Mascot({ mood = 'happy', size = 96, className = '', title, follow = true }) {
+export function Mascot({ mood = 'happy', size = 96, className = '', title, follow = true, hat }) {
   const ref = useRef(null)
+  const [worn, setWorn] = useState(getHat())
+  useEffect(() => { const h = (e) => setWorn(e.detail); window.addEventListener('tb-hat', h); return () => window.removeEventListener('tb-hat', h) }, [])
+  const wearing = hat || worn
   useEffect(() => {
     if (!follow) return
     startListening()
@@ -81,7 +86,7 @@ export function Mascot({ mood = 'happy', size = 96, className = '', title, follo
         {mood === 'cheer' && <g className="m-sparks">
           <path d="M14 30 l2 5 5 2 -5 2 -2 5 -2 -5 -5 -2 5 -2z" /><path d="M104 38 l1.5 4 4 1.5 -4 1.5 -1.5 4 -1.5 -4 -4 -1.5 4 -1.5z" /><path d="M60 8 l1.5 4 4 1.5 -4 1.5 -1.5 4 -1.5 -4 -4 -1.5 4 -1.5z" />
         </g>}
-        <g className="m-wheels">
+        {wearing && wearing !== 'none' && <Hat kind={wearing} />}        <g className="m-wheels">
           {[34, 60, 86].map((x) => (
             <g key={x}><circle cx={x} cy="98" r="11" fill="var(--m-wheel)" /><g className="m-wheel"><circle cx={x} cy="98" r="5" fill="var(--m-accent)" /><rect x={x - 1} y="88" width="2" height="6" rx="1" fill="var(--m-ink)" opacity=".35" /></g></g>
           ))}
@@ -90,6 +95,21 @@ export function Mascot({ mood = 'happy', size = 96, className = '', title, follo
       <rect x="6" y="110" width="108" height="3.5" rx="1.75" fill="var(--m-track)" />
     </svg>
   )
+}
+
+function Hat({ kind }) {
+  const INK = 'var(--m-ink)'
+  switch (kind) {
+    case 'party': return <g className="m-hat"><path d="M28 25 L50 25 L39 4Z" fill="#ff9ecb" /><path d="M31 21 L47 21" stroke="#fff" strokeWidth="2.4" opacity=".7" /><path d="M34 14 L44 14" stroke="#ffe29a" strokeWidth="2.4" /><circle cx="39" cy="4" r="3.6" fill="#ffe29a" /></g>
+    case 'flowers': return <g className="m-hat">{[[26, 35, '#ff9ecb'], [41, 32, '#ffe29a'], [57, 33, '#8ee6c4'], [73, 33, '#ff9ecb'], [90, 36, '#ffe29a']].map(([x, y, c], i) => <g key={i}>{[0, 72, 144, 216, 288].map((a) => <circle key={a} cx={x + 3.4 * Math.cos(a * Math.PI / 180)} cy={y + 3.4 * Math.sin(a * Math.PI / 180)} r="2.7" fill={c} />)}<circle cx={x} cy={y} r="2.2" fill="#fff6c9" /></g>)}<path d="M20 38 Q58 28 98 40" stroke="#6fcf97" strokeWidth="2" fill="none" opacity=".8" /></g>
+    case 'glasses': return <g className="m-hat" fill="#fff" fillOpacity=".14" stroke={INK} strokeWidth="2.6"><circle cx="47" cy="62" r="12" /><circle cx="73" cy="62" r="12" /><path d="M59 62 Q60 60 61 62" fill="none" /><path d="M35 60 L28 56 M85 60 L92 56" fill="none" strokeLinecap="round" /></g>
+    case 'headphones': return <g className="m-hat"><path d="M20 58 Q20 26 60 26 Q100 26 100 58" stroke="#ffab7d" strokeWidth="5" fill="none" strokeLinecap="round" /><rect x="11" y="52" width="12" height="22" rx="6" fill="#ff9ecb" /><rect x="97" y="52" width="12" height="22" rx="6" fill="#ff9ecb" /></g>
+    case 'crown': return <g className="m-hat"><path d="M26 24 L26 9 L32.5 17 L39 6 L45.5 17 L52 9 L52 24Z" fill="#ffd36b" stroke="#ffab7d" strokeWidth="2" strokeLinejoin="round" /><circle cx="39" cy="14" r="2.3" fill="#ff9ecb" /></g>
+    case 'sparkle': return <g className="m-hat"><path d="M24 30 Q39 12 54 30" stroke="#d3c6ff" strokeWidth="3" fill="none" strokeLinecap="round" /><path d="M39 4 l2.6 6.4 6.4 2.6 -6.4 2.6 -2.6 6.4 -2.6 -6.4 -6.4 -2.6 6.4 -2.6z" fill="#ffe29a" /></g>
+    case 'bow': return <g className="m-hat"><path d="M30 30 L14 20 L14 40Z" fill="#ff9ecb" /><path d="M30 30 L46 20 L46 40Z" fill="#ff7fb5" /><circle cx="30" cy="30" r="5" fill="#ffc0dd" /></g>
+    case 'nightcap': return <g className="m-hat"><path d="M22 36 Q30 -2 72 14 Q50 14 56 36Z" fill="#8fd3ff" /><path d="M22 36 L58 36" stroke="#fff" strokeWidth="5" strokeLinecap="round" opacity=".9" /><circle cx="73" cy="14" r="5" fill="#fff" /></g>
+    default: return null
+  }
 }
 
 function Eye({ x, big, look, up }) {
@@ -135,7 +155,12 @@ export function Sky() {
   return (
     <div className="sky" aria-hidden="true">
       <span className="orb" />
+      <span className="rainbow" />
       <span className="cloud c1" /><span className="cloud c2" /><span className="cloud c3" />
+      <span className="balloon b1">🎈</span><span className="balloon b2">🎈</span>
+      <span className="bird bd1">🕊️</span><span className="bird bd2">🕊️</span>
+      {[...Array(8)].map((_, i) => <span key={i} className={`firefly ff${i}`} />)}
+      <svg className="sky-hills" viewBox="0 0 400 60" preserveAspectRatio="none"><path d="M0 38 Q70 6 150 34 T300 28 T400 36 V60 H0Z" fill="var(--hill-a)" /><path d="M0 50 Q90 26 190 46 T400 42 V60 H0Z" fill="var(--hill-b)" /></svg>
       {[...Array(9)].map((_, i) => <span key={i} className={`star s${i}`}>✦</span>)}
     </div>
   )
@@ -167,6 +192,7 @@ export function tempMood(t) {
 }
 
 /** Mascot + three dots while something loads. */
-export function Loading({ text = 'One moment…', mood = 'working' }) {
-  return <div className="row muted loading" style={{ fontWeight: 700 }}><Mascot mood={mood} size={54} /> <span>{text}</span><span className="dots"><i /><i /><i /></span></div>
+export function Loading({ text, mood = 'working' }) {
+  const line = useMemo(() => text || pick(LOADING), [text])
+  return <div className="row muted loading" style={{ fontWeight: 700 }}><Mascot mood={mood} size={54} /> <span>{line}</span><span className="dots"><i /><i /><i /></span></div>
 }

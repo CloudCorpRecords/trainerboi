@@ -3,6 +3,7 @@ import { useHardware } from './api'
 import { Mascot } from './mascot'
 import { burst } from './effects'
 import { toot, chime } from './sound'
+import { pokeCount, earn, HATS } from './rewards'
 import { X } from 'lucide-react'
 
 const Ctx = createContext({ say: () => {}, celebrate: () => {} })
@@ -42,6 +43,20 @@ export function CompanionProvider({ children }) {
     setAnim('hop'); setTimeout(() => setAnim(''), 1600)
   }, [say])
 
+  // new stickers
+  useEffect(() => {
+    const h = (e) => {
+      const s = e.detail
+      if (!s) return
+      const hat = s.hat && HATS.find((x) => x.id === s.hat)
+      chime(); burst(window.innerWidth - 90, window.innerHeight - 100, ['⭐', '✨', '🌟'], 10)
+      say(`New sticker: ${s.emoji} ${s.title}!${hat ? ` I unlocked the ${hat.label.toLowerCase()} ${hat.emoji} — try it in the Sticker book.` : ''}`, 'cheer', 11000)
+      setAnim('hop'); setTimeout(() => setAnim(''), 1200)
+    }
+    window.addEventListener('tb-earned', h)
+    return () => window.removeEventListener('tb-earned', h)
+  }, [say])
+
   // gentle tips now and then when nothing else is happening
   useEffect(() => {
     const t = setInterval(() => { if (!bubbleRef.current && !asleepRef.current) say(TIPS[Math.floor(Math.random() * TIPS.length)], 'happy', 9000) }, 55000)
@@ -73,6 +88,7 @@ export function CompanionProvider({ children }) {
   const poke = (e) => {
     if (asleep) { setAsleep(false); try { localStorage.setItem('tb-boi-sleep', '0') } catch { /* ignore */ } say('Mmm… oh! Good to see you. 💜', 'happy'); return }
     toot(); burst(e.clientX, e.clientY)
+    if (pokeCount() >= 10) earn('poked')
     setAnim('hop'); setTimeout(() => setAnim(''), 800)
     say(POKES[Math.floor(Math.random() * POKES.length)], 'happy', 4000)
   }
