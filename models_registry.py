@@ -307,9 +307,31 @@ def build_package(rec, kind="auto", log=print):
     with open(os.path.join(pkg, "use_this_model.py"), "w", encoding="utf-8") as f:
         f.write(CHAT_SCRIPT)
     if not card_rec["adapter"]:
-        with open(os.path.join(pkg, "Modelfile"), "w", encoding="utf-8") as f:
-            f.write(MODELFILE)
+        write_ollama_files(pkg, rec["title"])
     return pkg
+
+
+def write_ollama_files(pkg, title):
+    """Modelfile (+ a double-click launcher for Windows) so the folder can be imported into Ollama. The ChatML template is only
+    written when this model really uses it; otherwise Ollama reads the template from the tokenizer."""
+    tk = _j(os.path.join(pkg, "tokenizer_config.json"), {}) or {}
+    tpl = str(tk.get("chat_template") or "")
+    try:                                    # newer transformers keep the template in its own file
+        with open(os.path.join(pkg, "chat_template.jinja"), encoding="utf-8") as f:
+            tpl += f.read()
+    except OSError:
+        pass
+    chatml = "<|im_start|>" in tpl
+    text = MODELFILE if chatml else "FROM .\n\nPARAMETER temperature 0.7\n"
+    with open(os.path.join(pkg, "Modelfile"), "w", encoding="utf-8", newline="\n") as f:
+        f.write(text)
+    tag = re.sub(r"[^a-z0-9._-]+", "-", title.lower()).strip("-") or "my-model"
+    bat = (f'@echo off\r\ncd /d "%~dp0"\r\necho Adding {tag} to Ollama...\r\nollama create {tag} -f Modelfile\r\n'
+           f'if errorlevel 1 (\r\n  echo.\r\n  echo Could not add it. Is Ollama installed and running? Get it free at ollama.com\r\n  pause\r\n  exit /b 1\r\n)\r\n'
+           f'echo.\r\necho Done! Starting a chat - type /bye to leave.\r\nollama run {tag}\r\n')
+    with open(os.path.join(pkg, "add_to_ollama.bat"), "w", encoding="utf-8", newline="") as f:
+        f.write(bat)
+    return tag
 
 
 def make_zip(pkg):

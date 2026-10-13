@@ -484,6 +484,53 @@ async def model_publish(mid: str, req: Request):
     return {"job": start_job(run)}
 
 
+@app.post("/api/models/{mid:path}/ollama")
+def model_ollama(mid: str):
+    """A folder with the full model + Modelfile + a double-click launcher, ready to import into Ollama / LM Studio."""
+    r = _rec(mid)
+    if r.get("kind") == "pretrain":
+        err("Models built from scratch use a tiny custom layout that Ollama can't read. Share it as a zip instead.")
+    if r.get("chat_ok") is False:
+        err("This is an embedding model - Ollama can't chat with it.")
+
+    def run(job):
+        pkg = MR.build_package(r, "full", log=lambda m: job["log"].append(m))
+        MR.write_ollama_files(pkg, r["title"])
+        return {"path": pkg, "name": os.path.basename(pkg), "size_mb": round(MR.dir_mb(pkg), 1)}
+    return {"job": start_job(run)}
+
+
+@app.post("/api/lessons")
+async def save_lesson(req: Request):
+    """Teach-back: keep a chat answer you liked (or your own better one) as a training example in 'lessons-<model>'."""
+    import dataset_store as ds
+    b = await req.json()
+    r = _rec(b.get("model_id", ""))
+    prompt, answer = (b.get("prompt") or "").strip(), (b.get("answer") or "").strip()
+    if not prompt or not answer:
+        err("A lesson needs both a question and an answer.")
+    if len(prompt) > 8000 or len(answer) > 8000:
+        err("That's a bit long for one lesson - keep it under 8,000 characters.")
+    name = nm("lessons-" + (re.sub(r"[^\w-]+", "-", r["title"].lower()).strip("-")[:40] or "model"))
+    d = ds.ds_dir(name)
+    os.makedirs(d, exist_ok=True)
+    train = os.path.join(d, "train.jsonl")
+    messages = [{"role": "user", "content": prompt}, {"role": "assistant", "content": answer}]
+    if b.get("system"):
+        messages.insert(0, {"role": "system", "content": str(b["system"])[:2000]})
+    with open(train, "a", encoding="utf-8") as f:
+        f.write(json.dumps({"messages": messages}, ensure_ascii=False) + "\n")
+    with open(train, encoding="utf-8") as f:
+        n = sum(1 for line in f if line.strip())
+    chars = os.path.getsize(train)
+    stats = {"name": name, "format": "sft", "train_examples": n, "eval_examples": 0, "total_tokens": chars // 4, "tokens_estimated": True,
+             "output_format": "jsonl", "files": ["train.jsonl"], "built_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+             "train_path": train.replace("\\", "/"), "sources": [f"Chats with {r['title']}"], "dropped": {}}
+    with open(os.path.join(d, "stats.json"), "w", encoding="utf-8") as f:
+        json.dump(stats, f, indent=2)
+    return {"name": name, "count": n}
+
+
 @app.post("/api/models/{mid:path}/delete")
 def model_delete(mid: str):
     r = _rec(mid)

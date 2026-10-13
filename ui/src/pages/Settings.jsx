@@ -4,6 +4,7 @@ import { post, usePoll, useJob, useHardware, toast, fmt } from '../api'
 import { Button, Card, Chip, Field, PageHeader, Progress, Stat } from '../ui'
 import { Sparkline } from '../charts'
 import { Mascot, tempMood } from '../mascot'
+import { openAll, setOpenAll } from '../rewards'
 
 export default function Settings() {
   const { hw, history } = useHardware()
@@ -11,6 +12,7 @@ export default function Settings() {
   const { data: health, reload: reloadHealth } = usePoll('/api/gpu/health', 600000)
   const [cap, setCap] = useState(82)
   const [job, follow] = useJob()
+  const [open, setOpen] = useState(openAll())
   useEffect(() => { if (s) setCap(s.gpu_max_temp) }, [s?.gpu_max_temp])
   useEffect(() => { if (job?.state === 'done') reloadHealth(); if (job?.state === 'error') toast(job.error, 'error') }, [job?.state])
   const g = hw?.gpu
@@ -47,6 +49,11 @@ export default function Settings() {
             <input type="range" min="0" max="92" value={cap} onChange={(e) => setCap(+e.target.value)} />
           </Field>
           <div style={{ marginTop: 10 }}><Button icon={Thermometer} onClick={saveCap} disabled={s && cap === s.gpu_max_temp}>Save</Button></div>
+        </Card>
+
+        <Card title="Open everything 🗝️">
+          <p className="muted" style={{ marginBottom: 12 }}>Boi's tricks (teach-back, birth certificates, the advanced Workshop methods) open up gently as you explore. If you already know your way around, switch this on and everything is yours from the start.</p>
+          <label className="row"><input type="checkbox" checked={open} onChange={(e) => { setOpen(e.target.checked); setOpenAll(e.target.checked); toast(e.target.checked ? 'Everything is open. 🗝️' : 'Back to unlocking as you go. 🌱', 'success') }} /> Open everything from the start</label>
         </Card>
 
         <Card title="Wellness check 🩺" action={health && <Chip tone={health.stable ? 'ok' : 'bad'}>{health.stable ? 'Feeling great' : 'Needs a little care'}</Chip>}>

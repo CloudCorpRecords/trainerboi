@@ -9,7 +9,7 @@ import { CompanionProvider } from './companion'
 import { installSparkles } from './effects'
 import { soundOn, setSound, pop } from './sound'
 import { PixieDust, dustOn, setDust } from './pixie'
-import { earn } from './rewards'
+import { earn, visitToday } from './rewards'
 import Stickers from './pages/Stickers'
 import Gather from './pages/Gather'
 import Workshop from './pages/Workshop'
@@ -37,7 +37,7 @@ const NAV = [
   { to: '/models', label: 'My little models', icon: Trophy },
   { section: 'Play' },
   { to: '/taste', label: 'Taste test', icon: Utensils },
-  { to: '/stickers', label: 'Sticker book', icon: Star },
+  { to: '/stickers', label: "Boi's trail", icon: Star },
   { section: 'Cozy corner' },
   { to: '/advanced', label: 'Toolbox', icon: Wrench },
   { to: '/settings', label: 'Care & comfort', icon: HeartPulse },
@@ -112,13 +112,14 @@ export default function App() {
   const { data: models } = usePoll('/api/models', 10000)
   const { data: mathRuns } = usePoll('/api/math/runs', 15000)
   useEffect(() => {          // stickers for real milestones
-    earn('hello')
+    earn('hello'); visitToday()
     if (new Date().getHours() < 5) earn('night_owl')
   }, [])
   useEffect(() => {
     const n = (models || []).filter((m) => m.status === 'done' && m.kind !== 'embedding').length
     if (n >= 1) earn('first_model')
     if (n >= 3) earn('three_models')
+    if (n >= 5) earn('five_models')
   }, [models])
   useEffect(() => { if ((mathRuns || []).some((r) => r.state === 'done')) earn('math') }, [mathRuns])
   return (

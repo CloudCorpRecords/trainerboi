@@ -51,6 +51,8 @@ A native-feeling desktop app (Electron + React) on top of a Python backend. Ever
 * **Workshop** - every training method (SFT, LoRA, DPO, ORPO, KTO, RL, from scratch) with a friendly picker, a 'which one?' quiz, 'suggest cozy settings', and every knob.
 * **Taste test** - ask two models the same question side by side, including a model against its own before-training self.
 * **Ask Boi** (`Ctrl K`) - type what you want ('math', 'pirate', 'share', 'joke') and jump straight there; plus *Little adventures* - a gentle checklist that earns stickers and hats.
+* **Boi's trail** - stickers, a friendly rank (Seedling → Starlight) and a count of cozy days you've dropped by (it only ever goes up). Milestones unlock real **tricks**: *Teach-back* (rate or fix a chat answer and it's saved as a lessons dataset you can train on), *birth certificates* for your models, and the advanced Workshop methods. No money, no streaks to lose, all stored locally - and **Care & comfort → Open everything** unlocks it all if you'd rather skip ahead. Add your own trick in `ui/src/rewards.js` (`PERKS`).
+* **Take it anywhere** - a model's Share tab can pack a folder with a ready-made Ollama Modelfile and a double-click launcher (LM Studio can open the same folder).
 
 Architecture: `studio_server.py` (FastAPI) serves `ui/dist` (React, built with Vite), a JSON API over the existing Python modules, and mounts the classic
 Gradio studio at `/classic`. `hw_info.py` is the torch-free hardware/job monitor that keeps the status readings fresh and accurate.

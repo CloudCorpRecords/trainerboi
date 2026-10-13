@@ -26,7 +26,7 @@ function Adventures() {
           <Link key={q.id} to={q.to} className={`quest ${got[q.id] ? 'done' : ''}`}><span className="qe">{got[q.id] ? '✅' : q.e}</span><span>{q.t}</span></Link>
         ))}
       </div>
-      <div className="small faint" style={{ marginTop: 10 }}>Each one earns a sticker — and some unlock hats for Boi. No rush at all. 🌿</div>
+      <div className="small faint" style={{ marginTop: 10 }}>Each one earns a sticker — and some unlock real new tricks. No rush at all. 🌿 <Link to="/stickers" style={{ textDecoration: 'underline' }}>Boi's trail</Link></div>
     </Card>
   )
 }

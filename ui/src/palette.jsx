@@ -13,7 +13,7 @@ const PAGES = [
   ['🏠', 'Home', '/', 'start'], ['✨', 'Teach a model', '/train', 'train guided new wizard'], ['🧮', 'Math playground', '/math', 'maths numbers practise'],
   ['🥣', 'Gather data', '/gather', 'data builder kitchen files links'], ['🔧', 'Workshop', '/workshop', 'manual training dpo orpo kto grpo settings knobs'],
   ['🌱', 'My data', '/data', 'datasets quality health clean'], ['💬', 'My little models', '/models', 'chat share export zip'], ['🍰', 'Taste test', '/taste', 'compare arena battle'],
-  ['🌟', 'Sticker book', '/stickers', 'hats closet rewards'], ['🧰', 'Toolbox', '/advanced', 'rag audio autotrain tune'], ['💜', 'Care & comfort', '/settings', 'gpu health temperature settings'],
+  ['🌟', "Boi's trail", '/stickers', 'stickers hats closet rewards tricks rank unlock'], ['🧰', 'Toolbox', '/advanced', 'rag audio autotrain tune'], ['💜', 'Care & comfort', '/settings', 'gpu health temperature settings'],
 ]
 const JOKES = [
   'Why did the model go to school? To get a little more training! 🎓', 'What do you call a sleepy neural network? A snooze-ral net. 😴', 'I told my GPU a joke. It said it was too hot to laugh. 🔥',

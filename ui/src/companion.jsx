@@ -3,7 +3,7 @@ import { useHardware } from './api'
 import { Mascot } from './mascot'
 import { burst } from './effects'
 import { toot, chime } from './sound'
-import { pokeCount, earn, HATS } from './rewards'
+import { pokeCount, earn, HATS, PERKS, rank } from './rewards'
 import { X } from 'lucide-react'
 
 const Ctx = createContext({ say: () => {}, celebrate: () => {} })
@@ -49,8 +49,15 @@ export function CompanionProvider({ children }) {
       const s = e.detail
       if (!s) return
       const hat = s.hat && HATS.find((x) => x.id === s.hat)
-      chime(); burst(window.innerWidth - 90, window.innerHeight - 100, ['⭐', '✨', '🌟'], 10)
-      say(`New sticker: ${s.emoji} ${s.title}!${hat ? ` I unlocked the ${hat.label.toLowerCase()} ${hat.emoji} — try it in the Sticker book.` : ''}`, 'cheer', 11000)
+      const perks = PERKS.filter((p) => p.needs === s.id)
+      const r = rank()
+      const rankedUp = r.count === r.at && r.index > 0
+      chime(); burst(window.innerWidth - 90, window.innerHeight - 100, ['⭐', '✨', '🌟'], rankedUp ? 22 : 10)
+      const bits = [`New sticker: ${s.emoji} ${s.title}!`]
+      if (perks.length) bits.push(`New trick unlocked: ${perks.map((p) => `${p.emoji} ${p.title}`).join(' and ')} — see Boi's trail.`)
+      if (rankedUp) bits.push(`You're a ${r.name} now ${r.emoji}`)
+      else if (hat && !perks.length) bits.push(`I unlocked the ${hat.label.toLowerCase()} ${hat.emoji}.`)
+      say(bits.join(' '), 'cheer', 12000)
       setAnim('hop'); setTimeout(() => setAnim(''), 1200)
     }
     window.addEventListener('tb-earned', h)

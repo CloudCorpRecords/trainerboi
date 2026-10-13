@@ -1,14 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { MessageCircle, Share2, FileText, Settings2, Send, Square, Package, Globe, Link2, Download, FolderOpen, ArrowLeft, Trash2, ExternalLink } from 'lucide-react'
+import { MessageCircle, Share2, FileText, Settings2, Send, Square, Package, Globe, Link2, Download, FolderOpen, ArrowLeft, Trash2, ExternalLink, ThumbsUp, Pencil, ScrollText, Luggage } from 'lucide-react'
 import { j, post, sse, usePoll, useJob, toast, fmt } from '../api'
 import { Button, Card, Chip, Field, PageHeader, Tabs, Progress } from '../ui'
 import { KIND } from './Models'
 import { Mascot } from '../mascot'
 import { useCompanion } from '../companion'
-import { earn } from '../rewards'
+import { earn, perkOn } from '../rewards'
+import { downloadCertificate } from '../certificate'
 
 function Chat({ rec }) {
+  const { say } = useCompanion()
+  const [kept, setKept] = useState({})          // message index -> saved as a lesson
+  const [fixing, setFixing] = useState(null)    // { i, text } while writing a better answer
   const [msgs, setMsgs] = useState([])
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
@@ -34,6 +38,15 @@ function Chat({ rec }) {
     setBusy(false); setLoading(false)
   }
   const raw = rec.kind === 'pretrain'
+  const lessons = perkOn('teachback') && !raw
+  const keep = async (i, answer) => {
+    try {
+      const r = await post('/api/lessons', { model_id: rec.id, prompt: msgs[i - 1]?.content, answer })
+      setKept((k) => ({ ...k, [i]: true })); setFixing(null); earn('lesson')
+      toast(`Saved as lesson #${r.count} in “${r.name}” (find it in My data).`, 'success')
+      say(r.count < 5 ? 'Thank you for teaching! A few more and we can train on them. 🎓' : `${r.count} lessons now — enough to teach a model something! 🎓`, 'love', 7000)
+    } catch (e) { toast(e.message, 'error') }
+  }
   return (
     <Card pad={false}>
       <div className="card-body">
@@ -43,9 +56,25 @@ function Chat({ rec }) {
               {raw ? 'This little model was built from scratch to continue text. Type a few words (like “Once upon a time”) and see where it goes. 📖' : 'Say hello to your model — it\'s been looking forward to meeting you. 👋'}
             </div>}
             {msgs.map((m, i) => (
-              <div key={i} className={`bubble-row ${m.role === 'user' ? 'user' : ''}`}>
-                {m.role !== 'user' && <Mascot mood={busy && i === msgs.length - 1 ? (loading || !m.content ? 'think' : 'working') : 'happy'} size={44} />}
-                <div className={`msg ${m.role === 'user' ? 'user' : 'bot'} ${busy && i === msgs.length - 1 ? 'typing' : ''}`}>{m.content || (loading ? 'Waking the model up (just the first time)…' : '')}</div>
+              <div key={i}>
+                <div className={`bubble-row ${m.role === 'user' ? 'user' : ''}`}>
+                  {m.role !== 'user' && <Mascot mood={busy && i === msgs.length - 1 ? (loading || !m.content ? 'think' : 'working') : 'happy'} size={44} />}
+                  <div className={`msg ${m.role === 'user' ? 'user' : 'bot'} ${busy && i === msgs.length - 1 ? 'typing' : ''}`}>{m.content || (loading ? 'Waking the model up (just the first time)…' : '')}</div>
+                </div>
+                {lessons && m.role === 'assistant' && m.content && !(busy && i === msgs.length - 1) && (
+                  kept[i] ? <div className="lesson-bar"><span className="saved">🎓 Kept as a lesson</span></div>
+                    : fixing?.i === i ? (
+                      <div className="lesson-edit">
+                        <textarea rows={3} value={fixing.text} onChange={(e) => setFixing({ i, text: e.target.value })} placeholder="Write the answer you wish it had given…" />
+                        <div className="row"><Button size="sm" variant="primary" disabled={!fixing.text.trim()} onClick={() => keep(i, fixing.text)}>Save lesson</Button><Button size="sm" variant="ghost" onClick={() => setFixing(null)}>Cancel</Button></div>
+                      </div>
+                    ) : (
+                      <div className="lesson-bar">
+                        <Button size="sm" variant="ghost" icon={ThumbsUp} onClick={() => keep(i, m.content)} title="Keep this answer as a training example">Good answer</Button>
+                        <Button size="sm" variant="ghost" icon={Pencil} onClick={() => setFixing({ i, text: m.content })} title="Fix it, then keep your version">Make it better</Button>
+                      </div>
+                    )
+                )}
               </div>
             ))}
             <div ref={end} />
@@ -56,7 +85,7 @@ function Chat({ rec }) {
           </div>
         </div>
         <div className="row" style={{ marginTop: 10 }}>
-          <Button variant="ghost" size="sm" onClick={() => setMsgs([])}>Clear chat</Button>
+          <Button variant="ghost" size="sm" onClick={() => { setMsgs([]); setKept({}); setFixing(null) }}>Clear chat</Button>
           <Button variant="ghost" size="sm" onClick={async () => { await post('/api/chat/unload'); toast('GPU memory freed.', 'success') }}>Free GPU memory</Button>
         </div>
       </div>
@@ -81,7 +110,10 @@ function Share({ rec }) {
   const [repo, setRepo] = useState('')
   const [priv, setPriv] = useState(true)
   const [token, setToken] = useState('')
+  const [packJob, followPack] = useJob()
+  const [parent, setParent] = useState(() => { try { return localStorage.getItem('tb-parent') || '' } catch { return '' } })
   const { data: share, reload } = usePoll('/api/share', 2500)
+  useEffect(() => { if (packJob?.state === 'done') { earn('travel'); say('Packed and ready to travel! 🧳 Double-click “add_to_ollama.bat” inside.', 'love', 10000) } }, [packJob?.state])
   useEffect(() => { if (zipJob?.state === 'done') { earn('shared') } }, [zipJob?.state])
   useEffect(() => { if (pubJob?.state === 'done' || share?.state === 'live') earn('shared') }, [pubJob?.state, share?.state])
   useEffect(() => { if (zipJob?.state === 'done') say('Wrapped up with a bow! 🎁 Send it to someone you like.', 'love', 9000) }, [zipJob?.state])
@@ -92,6 +124,11 @@ function Share({ rec }) {
 
   const makeZip = async () => { try { const r = await post(`/api/models/${id}/zip`, { kind }); followZip(r.job) } catch (e) { toast(e.message, 'error') } }
   const publish = async () => { try { const r = await post(`/api/models/${id}/publish`, { kind, repo, private: priv, token }); followPub(r.job) } catch (e) { toast(e.message, 'error') } }
+  const makePack = async () => { try { const r = await post(`/api/models/${id}/ollama`); followPack(r.job) } catch (e) { toast(e.message, 'error') } }
+  const certificate = () => {
+    try { localStorage.setItem('tb-parent', parent.trim()) } catch { /* ignore */ }
+    downloadCertificate(rec, parent.trim()); earn('postcard'); say('A certificate for your little one! 📜💜', 'love', 7000)
+  }
   const startShare = async () => { try { await post(`/api/models/${id}/share/start`); reload() } catch (e) { toast(e.message, 'error') } }
   const stopShare = async () => { await post('/api/share/stop'); reload() }
 
@@ -112,6 +149,28 @@ function Share({ rec }) {
           {zipJob?.state === 'error' && <Chip tone="bad">{zipJob.error}</Chip>}
         </div>
       </ShareRow>
+
+      {rec.kind !== 'pretrain' && rec.chat_ok !== false && (
+        <ShareRow icon={Luggage} title="Take it anywhere: Ollama & LM Studio 🧳" text="A folder with the full model, a ready-made Modelfile and a double-click launcher that adds it to Ollama. LM Studio and other apps can open the same folder.">
+          <div className="row wrap">
+            <Button icon={Luggage} onClick={makePack} disabled={packJob?.state === 'running'}>{packJob?.state === 'running' ? 'Packing…' : 'Pack my bags'}</Button>
+            {packJob?.state === 'running' && <span className="muted small">{packJob.log?.slice(-1)[0] || 'Working…'}</span>}
+            {packJob?.state === 'done' && <><Chip tone="ok">{packJob.result.name} · {packJob.result.size_mb} MB</Chip><Button variant="ghost" icon={FolderOpen} onClick={() => post('/api/reveal', { path: packJob.result.path })}>Show folder</Button></>}
+            {packJob?.state === 'error' && <Chip tone="bad">{packJob.error}</Chip>}
+          </div>
+        </ShareRow>
+      )}
+
+      {perkOn('certificate')
+        ? (
+          <ShareRow icon={ScrollText} title="Birth certificate 📜" text="A pretty one-page certificate you can open, print or send along with the model. It's made right here — nothing is uploaded.">
+            <div className="row wrap">
+              <input type="text" value={parent} onChange={(e) => setParent(e.target.value)} placeholder="Your name (optional)" style={{ maxWidth: 220 }} />
+              <Button icon={Download} onClick={certificate}>Download certificate</Button>
+            </div>
+          </ShareRow>
+        )
+        : <div className="cert-hint">📜 Birth certificates unlock with your first finished model.</div>}
 
       <ShareRow icon={Globe} title="Publish on Hugging Face" text="Free hosting with a link you can send. Needs a Hugging Face account and an access token with write permission (or sign in once with the Hugging Face CLI and leave the token empty). Check the base model's licence on the Card tab first.">
         <div className="grid g2">

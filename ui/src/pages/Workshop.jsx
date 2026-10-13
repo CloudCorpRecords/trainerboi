@@ -6,7 +6,7 @@ import { Button, Card, Chip, Field, PageHeader, Md } from '../ui'
 import { Mascot } from '../mascot'
 import { useCompanion } from '../companion'
 import { cuteName } from '../recipes'
-import { earn } from '../rewards'
+import { earn, perkOn } from '../rewards'
 
 const NEEDS = { sft: ['sft'], dpo: ['dpo'], orpo: ['dpo'], kto: ['dpo'], grpo: ['sft'], pretrain: ['pretrain'] }
 const FORMAT_WORD = { sft: 'question-and-answer', dpo: 'good-vs-better-answer', pretrain: 'plain-text' }
@@ -31,6 +31,8 @@ export default function Workshop() {
   const [name, setName] = useState('')
   const [busy, setBusy] = useState(false)
 
+  const [lockMsg, setLockMsg] = useState(false)
+  const isLocked = (m) => !!m && !m.redirect && m.level !== 'Start here' && m.level !== 'Unique' && !perkOn('advanced')
   const card = meta?.methods.find((m) => m.id === method)
   const run = card?.run
   const picked = datasets?.find((d) => d.train_path === dataset)
@@ -38,7 +40,7 @@ export default function Workshop() {
 
   const quiz = async (h, w) => {
     if (!h || !w) return
-    try { const r = await post('/api/methods/recommend', { have: h, want: w }); setAdvice(r); setMethod(r.id); say('How about this one? 💡', 'think', 4500) } catch (e) { toast(e.message, 'error') }
+    try { const r = await post('/api/methods/recommend', { have: h, want: w }); setAdvice(r); const m = meta.methods.find((x) => x.id === r.id); if (isLocked(m)) { setMethod(null); setLockMsg(true) } else { setMethod(r.id); setLockMsg(false) }; say('How about this one? 💡', 'think', 4500) } catch (e) { toast(e.message, 'error') }
   }
   const recommend = async () => {
     if (!run) return
@@ -72,11 +74,12 @@ export default function Workshop() {
             <Field label="What do you have?"><select value={have} onChange={(e) => { setHave(e.target.value); quiz(e.target.value, want) }}><option value="">…</option>{meta.have.map((h) => <option key={h}>{h}</option>)}</select></Field>
             <Field label="What should it do?"><select value={want} onChange={(e) => { setWant(e.target.value); quiz(have, e.target.value) }}><option value="">…</option>{meta.want.map((h) => <option key={h}>{h}</option>)}</select></Field>
           </div>
+          {lockMsg && <div className="callout warn" style={{ margin: '12px 0' }}><Mascot mood="sleepy" size={40} /><div>That one opens up after your first finished model (it's a little trickier). <Link to="/train" style={{ textDecoration: 'underline' }}>Teach your first one</Link> — or switch on “Open everything” in <Link to="/settings" style={{ textDecoration: 'underline' }}>Care &amp; comfort</Link>.</div></div>}
           {advice && <div className="callout" style={{ margin: '12px 0' }}><Mascot mood="think" size={44} /><div><b>Try “{meta.methods.find((m) => m.id === advice.id)?.name}”.</b> {advice.why}</div></div>}
           <div className="method-grid">
             {meta.methods.map((m) => (
-              <button key={m.id} className={`method ${method === m.id ? 'on' : ''}`} onClick={() => (m.redirect ? nav(m.redirect) : setMethod(m.id))}>
-                <div className="row spread"><span style={{ fontSize: 26 }}>{m.icon}</span><Chip tone={m.level === 'Start here' ? 'ok' : m.level === 'Unique' ? 'accent' : 'neutral'}>{m.redirect ? 'opens its own page' : m.level}</Chip></div>
+              <button key={m.id} className={`method ${method === m.id ? 'on' : ''} ${isLocked(m) ? 'locked-method' : ''}`} onClick={() => { if (m.redirect) nav(m.redirect); else if (isLocked(m)) { setLockMsg(true); say('That one opens after your first finished model. 🌱', 'sleepy', 5000) } else { setLockMsg(false); setMethod(m.id) } }}>
+                <div className="row spread"><span style={{ fontSize: 26 }}>{m.icon}</span><Chip tone={m.level === 'Start here' ? 'ok' : m.level === 'Unique' ? 'accent' : 'neutral'}>{m.redirect ? 'opens its own page' : isLocked(m) ? '🔒 after 1st model' : m.level}</Chip></div>
                 <h4>{m.name}</h4><p>{m.tagline}</p>
                 {method === m.id && <div className="small method-more"><div><b>Like:</b> {m.analogy}</div><div><b>Needs:</b> {m.data}</div><div><b>Memory:</b> {m.gpu} · <b>Time:</b> {m.time}</div><div><b>Great when:</b> {m.use_when}</div></div>}
               </button>

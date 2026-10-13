@@ -539,3 +539,17 @@ pre.log { background: var(--bg-2); border: 1.5px solid var(--border); border-rad
 .plate { display: flex; flex-direction: column; gap: 12px; padding: 18px; border-radius: 26px; background: var(--surface); border: 2px solid var(--border); box-shadow: var(--shadow); min-height: 240px; transition: .3s; }
 .plate.win { border-color: var(--pink); background: color-mix(in srgb, var(--pink) 10%, var(--surface)); transform: scale(1.015); }
 .plate-body { flex: 1; white-space: pre-wrap; font-weight: 600; line-height: 1.55; }
+/* Boi's trail: rank, tricks, cozy days */
+.trail-rank, .trail-perks { margin-bottom: 16px; }
+.rank-badge { width: 84px; height: 84px; border-radius: 50%; display: grid; place-items: center; font-size: 44px; background: radial-gradient(circle at 35% 30%, var(--accent-soft, rgba(185,165,255,.25)), transparent 70%), var(--accent-soft); border: 2px dashed var(--accent); animation: float 4s ease-in-out infinite; }
+.rank-name { font-family: 'Fredoka Variable', 'Fredoka', sans-serif; font-size: 26px; font-weight: 600; }
+.rank-steps { display: flex; gap: 10px; margin-top: 8px; font-size: 20px; } .rank-steps span { opacity: .3; filter: grayscale(1); transition: all .4s; } .rank-steps span.on { opacity: 1; filter: none; }
+.cozy-days { text-align: center; padding: 10px 18px; border-radius: 18px; background: var(--accent-soft); display: flex; flex-direction: column; } .cozy-days b { font-size: 34px; font-family: 'Fredoka Variable', 'Fredoka', sans-serif; line-height: 1; } .cozy-days span { font-weight: 800; font-size: 13px; } .cozy-days small { opacity: .7; margin-top: 2px; }
+.perk-list { display: grid; gap: 12px; }
+.perk { display: flex; gap: 14px; align-items: flex-start; padding: 12px 14px; border-radius: 18px; border: 1.5px solid var(--border); } .perk.on { background: linear-gradient(135deg, rgba(185,165,255,.14), rgba(255,158,203,.1)); border-color: var(--accent); } .perk.locked { opacity: .75; border-style: dashed; }
+.perk-ico { width: 42px; height: 42px; flex: none; border-radius: 14px; display: grid; place-items: center; font-size: 22px; background: var(--accent-soft); }
+.perk-need { margin-top: 4px; color: var(--accent-2, var(--accent)); }
+.lesson-bar { display: flex; gap: 6px; align-items: center; margin: 4px 0 0 54px; flex-wrap: wrap; } .lesson-bar .saved { font-size: 12px; font-weight: 800; color: var(--ok); }
+.lesson-edit { margin: 6px 0 0 54px; display: grid; gap: 6px; max-width: 520px; }
+.cert-hint { font-size: 12px; opacity: .7; }
+.locked-method { opacity: .7; border-style: dashed !important; }
