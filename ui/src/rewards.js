@@ -30,6 +30,8 @@ export const PERKS = [
     what: 'Download a pretty one-page certificate for any model: its name, what it was taught from, and when it was born. Lovely to send along with a share.' },
   { id: 'advanced', emoji: '🔧', title: 'Advanced Workshop', needs: 'first_model', where: 'Workshop',
     what: 'Opens the preference, reinforcement-learning and from-scratch methods, so you meet the simple ones first and the clever ones when you\'re ready.' },
+  { id: 'luckynames', emoji: '🎲', title: 'Lucky names', needs: 'first_model', where: 'Guided training → Advanced',
+    what: 'Adds a 🎲 button next to Run name that deals a fresh surprise name. Roll as many times as you like until one feels lucky.' },
 ]
 
 export const RANKS = [

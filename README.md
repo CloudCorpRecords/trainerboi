@@ -42,6 +42,12 @@ Licensed under the [MIT License](LICENSE). Models you train keep the licence of 
 
 A native-feeling desktop app (Electron + React) on top of a Python backend. Everything the GPU does runs in separate processes, so the window stays smooth.
 
+![Home screen: Boi the little train greets you, with GPU activity cards and shortcuts to Teach a model, Math playground, My data and My little models](docs/screenshots/home.png)
+
+![New training screen: three gentle steps with one-click recipe cards including Pirate buddy, Recipe chef, Bedtime storyteller and Study buddy](docs/screenshots/new-training.png)
+
+![Math Lab screen: a new practice session form with model picker, rounds and difficulty sliders, and Professor Hoot the owl](docs/screenshots/math-lab.png)
+
 | Screen | What it does |
 |---|---|
 | **Home** | Live GPU activity, memory, temperature and power straight from the NVIDIA driver, what's running now, recent models and activity. |

@@ -6,6 +6,7 @@ import { Button, Card, Chip, Field, PageHeader, Md } from '../ui'
 import { Mascot } from '../mascot'
 import { useCompanion } from '../companion'
 import { RECIPES, cuteName } from '../recipes'
+import { perkOn } from '../rewards'
 
 const EMOJI = { docs: '📄', persona: '💬', instruct: '🧠', code: '💻', prefer: '⚖️', scratch: '🧱' }
 const SRC_LABEL = { urls: 'Website', hf: 'Hugging Face', wikipedia: 'Wikipedia', arxiv: 'Papers', github: 'GitHub', youtube: 'YouTube', folders: 'On this PC' }
@@ -222,7 +223,7 @@ export default function Train() {
             {adv && (
               <div className="grid g2" style={{ marginTop: 10 }}>
                 <Field label="Base model"><select value={model} onChange={(e) => setModel(e.target.value)}>{meta.models.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}</select></Field>
-                <Field label="Run name" hint="Leave empty for a surprise name 🎲"><input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="a surprise…" /></Field>
+                <Field label="Run name" hint="Leave empty for a surprise name 🎲"><div className="row" style={{ gap: 8 }}><input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="a surprise…" style={{ flex: 1 }} />{perkOn('luckynames') && <button className="btn btn-ghost btn-sm" onClick={() => setName(cuteName())} title="Roll a fresh surprise name">🎲</button>}</div></Field>
               </div>
             )}
           </div>

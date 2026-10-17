@@ -1,0 +1,43 @@
+name: Release installer
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  windows-installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+
+      - uses: astral-sh/setup-uv@v7
+
+      - name: Install desktop dependencies
+        working-directory: desktop
+        run: npm ci
+
+      - name: Build the UI
+        working-directory: desktop
+        run: npm run ui
+
+      - name: Stage app sources
+        working-directory: desktop
+        run: node scripts/stage.js
+
+      - name: Build the installer
+        working-directory: desktop
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+        run: npm run dist:release
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create ${{ github.ref_name }} desktop/dist/*.exe --title "TrainerBoi ${{ github.ref_name }}" --notes "Windows installer. Unsigned builds show a SmartScreen warning on first install; see README for install-from-source."
