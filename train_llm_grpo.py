@@ -21,6 +21,7 @@ import re
 import time
 import argparse
 
+import device_utils
 import trainer_utils
 import llm_data
 
@@ -118,7 +119,7 @@ def train_grpo(args):
 
 def _train_grpo(args, live):
     import torch
-    from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+    from transformers import AutoTokenizer, AutoModelForCausalLM
     from peft import LoraConfig, prepare_model_for_kbit_training
     from trl import GRPOTrainer, GRPOConfig
 
@@ -131,11 +132,13 @@ def _train_grpo(args, live):
     live.phase("Loading model")
     tokenizer = llm_data.ensure_chat_template(AutoTokenizer.from_pretrained(args.model))
     live.tokenizer = tokenizer
-    quant = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_use_double_quant=True,
-                               bnb_4bit_compute_dtype=torch.bfloat16) if args.load_4bit else None
-    model = AutoModelForCausalLM.from_pretrained(args.model, quantization_config=quant, dtype=torch.bfloat16,
-                                                 device_map={"": 0}, attn_implementation="sdpa")
-    if args.load_4bit:
+    quant, note = device_utils.quant_config_4bit(args.load_4bit, "GRPO")
+    if note:
+        print(note)
+    model = AutoModelForCausalLM.from_pretrained(args.model, quantization_config=quant, attn_implementation="sdpa",
+                                                 **device_utils.model_load_kwargs())
+    model = device_utils.to_device(model)
+    if quant is not None:
         model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=True)
 
     live.phase("Loading dataset")
@@ -159,6 +162,7 @@ def _train_grpo(args, live):
 
     n_gen = args.num_generations
     batch = max(args.batch_size, 1) * n_gen  # per-device batch must be a multiple of num_generations
+    mp = device_utils.mixed_precision()
     config = GRPOConfig(
         output_dir=args.output_dir,
         num_generations=n_gen,
@@ -170,14 +174,17 @@ def _train_grpo(args, live):
         learning_rate=args.lr,
         lr_scheduler_type="cosine",
         warmup_steps=0.05,
-        optim="paged_adamw_8bit",
-        bf16=True,
+        optim=device_utils.training_optim(),
+        bf16=mp["bf16"],
+        fp16=mp["fp16"],
         gradient_checkpointing=True,
         logging_steps=2,
         save_steps=args.save_steps,
         save_total_limit=2,
         report_to=args.report_to,
         temperature=0.9,
+        dataloader_pin_memory=device_utils.accelerator() == "cuda",
+        **device_utils.extra_training_args(),
     )
     trainer = GRPOTrainer(
         model=model, args=config, train_dataset=ds, reward_funcs=get_rewards(args), processing_class=tokenizer,
@@ -189,13 +196,13 @@ def _train_grpo(args, live):
     from transformers.trainer_utils import get_last_checkpoint
     resume = get_last_checkpoint(args.output_dir) if args.resume and os.path.isdir(args.output_dir) else None
     result = trainer.train(resume_from_checkpoint=resume)
-    print(f"--> Done in {time.time() - t0:.1f}s | peak VRAM {torch.cuda.max_memory_allocated() / 1024**3:.2f} GB")
+    print(f"--> Done in {time.time() - t0:.1f}s | peak memory {device_utils.peak_gb_text()}")
 
     final_dir = os.path.join(args.output_dir, "final")
     trainer.save_model(final_dir)
     tokenizer.save_pretrained(final_dir)
     print(f"--> Saved GRPO adapter to {final_dir}")
-    live.finish(final_dir, train_loss=result.training_loss, peak_vram_gb=torch.cuda.max_memory_allocated() / 1024**3)
+    live.finish(final_dir, train_loss=result.training_loss, peak_vram_gb=device_utils.peak_gb())
     return final_dir
 
 

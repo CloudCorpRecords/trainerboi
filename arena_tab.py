@@ -7,8 +7,9 @@ import os
 import time
 import torch
 import gradio as gr
-from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+from transformers import AutoTokenizer, AutoModelForCausalLM
 from peft import PeftModel
+import device_utils
 import trainer_utils
 import playground_tab
 
@@ -18,48 +19,43 @@ def get_arena_model(path, is_adapter=False):
     if path in _ARENA_CACHE:
         return _ARENA_CACHE[path]
         
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    compute_dtype = torch.bfloat16 if (torch.cuda.is_available() and torch.cuda.is_bf16_supported()) else torch.float16
-    quant_config = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_quant_type="nf4",
-        bnb_4bit_use_double_quant=True,
-        bnb_4bit_compute_dtype=compute_dtype
-    )
-    
+    quant_config, note = device_utils.quant_config_4bit(True, "the arena")
+    if note:
+        print(note)
+    load_kw = device_utils.model_load_kwargs()
+
     adapter_cfg = os.path.join(path, "adapter_config.json")
     if os.path.exists(adapter_cfg):
         import json
         with open(adapter_cfg, "r", encoding="utf-8") as f:
             base_id = json.load(f).get("base_model_name_or_path", "Qwen/Qwen2.5-0.5B-Instruct")
-            
+
         tokenizer = AutoTokenizer.from_pretrained(path, trust_remote_code=True)
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
-            
+
         base_model = AutoModelForCausalLM.from_pretrained(
             base_id,
             quantization_config=quant_config,
-            torch_dtype=compute_dtype,
-            device_map="auto",
             attn_implementation="sdpa",
-            trust_remote_code=True
+            trust_remote_code=True,
+            **load_kw,
         )
         model = PeftModel.from_pretrained(base_model, path)
     else:
         tokenizer = AutoTokenizer.from_pretrained(path, trust_remote_code=True)
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
-            
+
         model = AutoModelForCausalLM.from_pretrained(
             path,
             quantization_config=quant_config,
-            torch_dtype=compute_dtype,
-            device_map="auto",
             attn_implementation="sdpa",
-            trust_remote_code=True
+            trust_remote_code=True,
+            **load_kw,
         )
-        
+    model = device_utils.to_device(model)
+
     model.eval()
     _ARENA_CACHE[path] = (model, tokenizer)
     return model, tokenizer

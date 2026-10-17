@@ -176,8 +176,9 @@ def stop(ds):
         return
     path = os.path.join(ROOT, ds, "build", "status.json")
     status = _read_json(path, {}) or {}
+    import device_utils
     for pid in filter(None, {status.get("pid"), PROCS[ds].pid if ds in PROCS else None}):
-        subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True)
+        device_utils.kill_pid(pid)
     if status:
         status.update(state="stopped", phase="Stopped by user")
         with open(path, "w", encoding="utf-8") as f:

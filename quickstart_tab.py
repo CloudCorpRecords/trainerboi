@@ -227,7 +227,8 @@ def stop(name):
     path = os.path.join(ROOT, "runs", name, "autopilot.json")
     st = _read_json(path, {}) or {}
     if st.get("pid"):
-        subprocess.run(["taskkill", "/PID", str(st["pid"]), "/T", "/F"], capture_output=True)
+        import device_utils
+        device_utils.kill_pid(st["pid"])
     if st:
         st["state"] = "stopped"
         for s in st["steps"]:
@@ -439,10 +440,8 @@ def chat(message, history, name):
 def unload():
     if _CHAT["model"] is not None:
         _CHAT.update(name=None, model=None, tok=None)
-        import gc
-        import torch
-        gc.collect()
-        torch.cuda.empty_cache()
+        import device_utils
+        device_utils.empty_cache()
 
 
 def export_model(name):

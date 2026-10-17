@@ -69,21 +69,20 @@ class Lab:
 
 # ------------------------------------------------------------------------------------------------ model helpers
 def load(model_path):
-    import torch
+    import device_utils
     from transformers import AutoTokenizer, AutoModelForCausalLM
     tok = AutoTokenizer.from_pretrained(model_path, padding_side="left")
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
-    model = AutoModelForCausalLM.from_pretrained(model_path, dtype=torch.bfloat16, device_map={"": 0}, attn_implementation="sdpa").eval()
-    return tok, model
+    model = AutoModelForCausalLM.from_pretrained(model_path, attn_implementation="sdpa",
+                                                 **device_utils.model_load_kwargs()).eval()
+    return tok, device_utils.to_device(model)
 
 
 def free(model):
-    import gc
-    import torch
+    import device_utils
     del model
-    gc.collect()
-    torch.cuda.empty_cache()
+    device_utils.empty_cache()
 
 
 def generate(tok, model, prompts, k=1, temperature=0.0, max_new=320, bs=24, guard=None, progress=None):

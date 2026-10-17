@@ -332,7 +332,8 @@ def push_to_hub(name, repo_id, private=True):
     try:
         user = api.whoami()["name"]
     except Exception:
-        raise RuntimeError("Not logged in to Hugging Face. In a terminal run:  .venv\\Scripts\\hf.exe auth login")
+        _hf_login = "hf auth login" if os.name != "nt" else ".venv\\Scripts\\hf.exe auth login"
+        raise RuntimeError(f"Not logged in to Hugging Face. In a terminal run:  {_hf_login}")
     if "/" not in repo_id:
         repo_id = f"{user}/{repo_id}"
     api.create_repo(repo_id, repo_type="dataset", private=private, exist_ok=True)

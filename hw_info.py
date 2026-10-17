@@ -12,6 +12,8 @@ import json
 import glob
 import time
 import platform
+import subprocess
+import sys
 
 import psutil
 
@@ -20,6 +22,32 @@ RUNS_DIR = os.path.join(ROOT, "runs")
 
 _NV = {"ok": None, "dev": None}
 _ID = {}
+_MPS = {"probed": False, "ok": False}
+
+
+def _mps_available():
+    """True when PyTorch can use Apple Metal. Probed lazily so this module stays torch-free to import."""
+    if not _MPS["probed"]:
+        _MPS["probed"] = True
+        try:
+            import torch
+            mps = getattr(torch.backends, "mps", None)
+            _MPS["ok"] = bool(mps is not None and mps.is_available())
+        except Exception:
+            _MPS["ok"] = False
+    return _MPS["ok"]
+
+
+def _mac_chip():
+    for exe in ("/usr/sbin/sysctl", "/sbin/sysctl", "sysctl"):
+        try:
+            out = subprocess.run([exe, "-n", "machdep.cpu.brand_string"],
+                                 capture_output=True, text=True, timeout=5).stdout.strip()
+            if out:
+                return out
+        except Exception:
+            continue
+    return None
 
 
 def _nvml():
@@ -56,12 +84,19 @@ def hw_identity():
             info["slowdown_c"] = float(pynvml.nvmlDeviceGetTemperatureThreshold(dev, pynvml.NVML_TEMPERATURE_THRESHOLD_SLOWDOWN))
         except Exception:
             pass
+    if sys.platform == "darwin" and info["gpu"] is None:
+        # Apple Silicon: the CPU and GPU share one pool of unified memory.
+        chip = _mac_chip()
+        if chip:
+            info["gpu"] = f"{chip} (MPS)"
+            info["vram_gb"] = psutil.virtual_memory().total / 1024 ** 3
+            info["unified_memory"] = True
     try:
         import winreg
         with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"HARDWARE\DESCRIPTION\System\CentralProcessor\0") as k:
             info["cpu"] = winreg.QueryValueEx(k, "ProcessorNameString")[0].strip()
     except Exception:
-        info["cpu"] = platform.processor() or "CPU"
+        info["cpu"] = (_mac_chip() if sys.platform == "darwin" else None) or platform.processor() or "CPU"
     _ID.update(info)
     return _ID
 
@@ -89,6 +124,14 @@ def snapshot():
                 g["clock_mhz"] = float(pynvml.nvmlDeviceGetClockInfo(dev, pynvml.NVML_CLOCK_SM))
             except Exception:
                 pass
+        except Exception:
+            pass
+    elif hw.get("unified_memory") and _mps_available():
+        # Apple Silicon: report the shared pool; per-process MPS usage when torch is loaded.
+        g["ok"] = True
+        try:
+            import torch
+            g["vram_used_gb"] = torch.mps.current_allocated_memory() / 1024 ** 3
         except Exception:
             pass
     ram = psutil.virtual_memory()

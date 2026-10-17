@@ -28,11 +28,15 @@ fs.cpSync(uiDist, path.join(stage, 'app-src', 'ui', 'dist'), { recursive: true }
 
 let uv = process.env.UV_PATH;
 if (!uv) {
-  try { uv = execSync('where uv', { encoding: 'utf8' }).split(/\r?\n/)[0].trim(); } catch (e) { /* not on PATH */ }
+  const probe = process.platform === 'win32' ? 'where uv' : 'which uv';
+  try { uv = execSync(probe, { encoding: 'utf8' }).split(/\r?\n/)[0].trim(); } catch (e) { /* not on PATH */ }
 }
+const uvName = process.platform === 'win32' ? 'uv.exe' : 'uv';
 if (!uv || !fs.existsSync(uv)) {
-  console.error('uv.exe not found. Install uv (https://docs.astral.sh/uv/) or set UV_PATH.');
+  console.error('uv not found. Install uv (https://docs.astral.sh/uv/) or set UV_PATH.');
   process.exit(1);
 }
-fs.copyFileSync(uv, path.join(stage, 'bin', 'uv.exe'));
+const dest = path.join(stage, 'bin', uvName);
+fs.copyFileSync(uv, dest);
+if (process.platform !== 'win32') fs.chmodSync(dest, 0o755);
 console.log('staged app-src and uv from', uv);

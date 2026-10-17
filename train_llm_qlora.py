@@ -1,5 +1,8 @@
 """
 train_llm_qlora.py - End-to-end 4-bit QLoRA fine-tuning for Large Language Models.
+
+On machines without an NVIDIA GPU (Macs, CPU-only) this automatically runs as
+full-precision LoRA instead, since 4-bit quantization needs bitsandbytes + CUDA.
 """
 
 import os
@@ -9,13 +12,13 @@ import torch
 from transformers import (
     AutoTokenizer,
     AutoModelForCausalLM,
-    BitsAndBytesConfig,
     TrainingArguments,
     Trainer,
     DataCollatorForLanguageModeling
 )
 from datasets import Dataset
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+import device_utils
 import trainer_utils
 
 def train_qlora(
@@ -34,39 +37,43 @@ def train_qlora(
     print(f"--> Base Model       : {model_id}")
     print(f"--> LoRA Rank (r)    : {lora_r}")
     print(f"--> LoRA Alpha       : {lora_alpha}")
-    print(f"--> Device           : cuda ({torch.cuda.get_device_name(0)})")
-    
-    # 1. 4-bit NormalFloat4 Quantization Configuration
-    compute_dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+    print(f"--> Device           : {device_utils.device_name()}")
+
+    # 1. 4-bit NormalFloat4 Quantization Configuration (NVIDIA only; elsewhere full-precision LoRA)
+    quant, note = device_utils.quant_config_4bit(True, "this demo")
+    if note:
+        print(note)
+    compute_dtype = device_utils.default_dtype()
     print(f"--> Compute Dtype    : {compute_dtype}")
-    
-    bnb_config = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_quant_type="nf4",
-        bnb_4bit_use_double_quant=True,
-        bnb_4bit_compute_dtype=compute_dtype
-    )
-    
+
     # 2. Load Tokenizer & Quantized Model
     print(f"--> Loading tokenizer for {model_id}...")
     tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
-        
-    print(f"--> Loading model in 4-bit NF4 quantization with native SDPA...")
+
+    print(f"--> Loading model {'in 4-bit NF4 quantization' if quant else 'in full precision'} with native SDPA...")
+    load_kw = device_utils.model_load_kwargs()
+    if device_utils.accelerator() == "cuda":
+        load_kw["device_map"] = "auto"
     model = AutoModelForCausalLM.from_pretrained(
         model_id,
-        quantization_config=bnb_config,
-        device_map="auto",
+        quantization_config=quant,
         attn_implementation="sdpa",
-        trust_remote_code=True
+        trust_remote_code=True,
+        **load_kw,
     )
-    
-    model = prepare_model_for_kbit_training(
-        model,
-        use_gradient_checkpointing=True,
-        gradient_checkpointing_kwargs={"use_reentrant": False}
-    )
+    model = device_utils.to_device(model)
+
+    if quant is not None:
+        model = prepare_model_for_kbit_training(
+            model,
+            use_gradient_checkpointing=True,
+            gradient_checkpointing_kwargs={"use_reentrant": False}
+        )
+    else:
+        model.gradient_checkpointing_enable()
+        model.enable_input_require_grads()
     
     # 3. Configure LoRA
     peft_config = LoraConfig(
@@ -98,22 +105,24 @@ def train_qlora(
     tokenized_dataset = dataset.map(tokenize_func, batched=True)
     
     # 5. High-Efficiency Training Arguments
+    mp = device_utils.mixed_precision()
     training_args = TrainingArguments(
         output_dir=output_dir,
         per_device_train_batch_size=batch_size,
         gradient_accumulation_steps=2,
         num_train_epochs=epochs,
         learning_rate=learning_rate,
-        optim="paged_adamw_8bit",
+        optim=device_utils.training_optim(),
         gradient_checkpointing=True,
         gradient_checkpointing_kwargs={"use_reentrant": False},
-        dataloader_pin_memory=True,
-        bf16=torch.cuda.is_bf16_supported(),
-        fp16=not torch.cuda.is_bf16_supported(),
+        dataloader_pin_memory=device_utils.accelerator() == "cuda",
+        bf16=mp["bf16"],
+        fp16=mp["fp16"],
         logging_steps=5,
         save_strategy="no",
         report_to="none",
-        warmup_steps=5
+        warmup_steps=5,
+        **device_utils.extra_training_args(),
     )
     
     data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)

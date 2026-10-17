@@ -9,7 +9,8 @@ import json
 import torch
 import gradio as gr
 from threading import Thread
-from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig, TextIteratorStreamer
+from transformers import AutoTokenizer, AutoModelForCausalLM, TextIteratorStreamer
+import device_utils
 import trainer_utils
 
 _CURRENT_MODEL = None
@@ -47,56 +48,49 @@ def load_model_pipeline(model_path, load_4bit=True):
     # Unload existing model
     unload_model()
     
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    compute_dtype = torch.bfloat16 if (torch.cuda.is_available() and torch.cuda.is_bf16_supported()) else torch.float16
-    
-    quant_config = None
-    if load_4bit and torch.cuda.is_available():
-        quant_config = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_use_double_quant=True,
-            bnb_4bit_compute_dtype=compute_dtype
-        )
-        
+    quant_config, note = device_utils.quant_config_4bit(load_4bit, "the playground")
+    if note:
+        print(note)
+    load_kw = device_utils.model_load_kwargs()
+
     adapter_cfg = os.path.join(model_path, "adapter_config.json")
     if os.path.exists(adapter_cfg):
         from peft import PeftModel
         with open(adapter_cfg, "r", encoding="utf-8") as f:
             base_id = json.load(f).get("base_model_name_or_path", "Qwen/Qwen2.5-0.5B-Instruct")
-            
+
         tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
-            
+
         base_model = AutoModelForCausalLM.from_pretrained(
             base_id,
             quantization_config=quant_config,
-            torch_dtype=compute_dtype,
-            device_map="auto",
-            trust_remote_code=True
+            trust_remote_code=True,
+            **load_kw,
         )
         model = PeftModel.from_pretrained(base_model, model_path)
     else:
         tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
-            
+
         model = AutoModelForCausalLM.from_pretrained(
             model_path,
             quantization_config=quant_config,
-            torch_dtype=compute_dtype,
-            device_map="auto" if torch.cuda.is_available() else None,
-            trust_remote_code=True
+            trust_remote_code=True,
+            **load_kw,
         )
-        
+    model = device_utils.to_device(model)
+
     model.eval()
     _CURRENT_MODEL = model
     _CURRENT_TOKENIZER = tokenizer
     _CURRENT_MODEL_ID = model_path
     
     stats = trainer_utils.get_gpu_telemetry()
-    return f"🚀 Successfully loaded **{model_path}** on GPU ({stats['vram_allocated_gb']} GB VRAM allocated)"
+    return (f"🚀 Successfully loaded **{model_path}** on {device_utils.device_label()} "
+            f"({stats['vram_allocated_gb']} GB VRAM allocated)")
 
 def unload_model():
     global _CURRENT_MODEL, _CURRENT_TOKENIZER, _CURRENT_MODEL_ID

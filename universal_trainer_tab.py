@@ -8,6 +8,7 @@ import os
 import json
 import pandas as pd
 import gradio as gr
+import device_utils
 import trainer_utils
 import train_tabular
 import train_llm_qlora
@@ -32,7 +33,7 @@ def analyze_uploaded_file(file_obj):
             info_md = f"""### 📊 Detected Tabular Dataset
 - **Format:** `{fname.split('.')[-1].upper()}` ({rows:,} rows, {cols} columns)
 - **Detected Target Column:** `{target_guess}` ({task_type})
-- **Recommended Model:** `GPU XGBoost (device='cuda', tree_method='hist')`
+- **Recommended Model:** `XGBoost (device='{device_utils.xgb_device()}', tree_method='hist')`
 - **Estimated Training Time:** ~0.5 to 2 seconds on your GPU
 - **Estimated VRAM:** ~150 MB (minimal memory footprint)
 """

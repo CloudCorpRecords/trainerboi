@@ -15,13 +15,15 @@ import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from peft import PeftModel
 from model_ids import resolve_base
+import device_utils
 
 
 def merge(adapter, out):
     with open(os.path.join(adapter, "adapter_config.json")) as f:
         base_id = resolve_base(json.load(f)["base_model_name_or_path"])
-    print(f"--> Loading base {base_id} in bf16 (merging needs unquantized weights)")
-    model = AutoModelForCausalLM.from_pretrained(base_id, dtype=torch.bfloat16, device_map={"": 0})
+    print(f"--> Loading base {base_id} (merging needs unquantized weights)")
+    model = AutoModelForCausalLM.from_pretrained(base_id, **device_utils.model_load_kwargs())
+    model = device_utils.to_device(model)
     model = PeftModel.from_pretrained(model, adapter).merge_and_unload()
     model.save_pretrained(out, safe_serialization=True)
     AutoTokenizer.from_pretrained(adapter).save_pretrained(out)

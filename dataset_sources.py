@@ -200,8 +200,12 @@ def ocr_pdf(path, max_pages=300, scale=3.0):
 class Transcriber:
     def __init__(self, model_id="openai/whisper-large-v3-turbo"):
         import torch
+        import device_utils
         from transformers import pipeline
-        self.pipe = pipeline("automatic-speech-recognition", model=model_id, dtype=torch.float16, device=0)
+        acc = device_utils.accelerator()
+        self.pipe = pipeline("automatic-speech-recognition", model=model_id,
+                             dtype=torch.float16 if acc != "cpu" else torch.float32,
+                             device=torch.device(acc))
 
     @staticmethod
     def decode(path):
