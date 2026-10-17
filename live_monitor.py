@@ -21,6 +21,8 @@ import traceback
 import contextlib
 import subprocess
 
+import device_utils
+
 from transformers import TrainerCallback
 
 
@@ -39,7 +41,11 @@ def _nvml_init():
             _NVML_INIT = False
 
 def nvidia_smi():
-    """Whole-GPU stats using direct C-API NVML (<1ms), with fallback to nvidia-smi."""
+    """Whole-GPU stats using direct C-API NVML (<1ms), with fallback to nvidia-smi.
+
+    On Apple Silicon returns MPS memory stats instead (util/temp/power are None:
+    macOS does not expose them). Returns {} when no accelerator data is available.
+    """
     _nvml_init()
     if _NVML_INIT:
         try:
@@ -66,7 +72,18 @@ def nvidia_smi():
         return {"gpu_util": util, "vram_used_gb": used / 1024, "vram_total_gb": total / 1024,
                 "temp_c": temp, "power_w": power, "sm_clock_mhz": clock}
     except Exception:
-        return {}
+        pass
+
+    if device_utils.accelerator() == "mps":
+        try:
+            import psutil
+            total = psutil.virtual_memory().total / 1024 ** 3
+            used = device_utils.allocated_gb() or 0.0
+            return {"gpu_util": None, "vram_used_gb": used, "vram_total_gb": total,
+                    "temp_c": None, "power_w": None, "sm_clock_mhz": None}
+        except Exception:
+            pass
+    return {}
 
 
 class LiveMonitor:
@@ -164,7 +181,7 @@ class LiveMonitor:
             else:
                 inputs = self.tokenizer(self.sample_prompt, return_tensors="pt")
             inputs = {k: v.to(model.device) for k, v in inputs.items()}
-            with torch.no_grad(), torch.autocast("cuda", dtype=torch.bfloat16):
+            with torch.no_grad(), device_utils.autocast():
                 out = model.generate(**inputs, max_new_tokens=self.sample_tokens, do_sample=True, temperature=0.7, top_p=0.9,
                                      pad_token_id=self.tokenizer.pad_token_id or self.tokenizer.eos_token_id)
             text = self.tokenizer.decode(out[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True)
@@ -241,6 +258,11 @@ class _LiveCallback(TrainerCallback):
         if torch.cuda.is_available():
             row["torch_vram_gb"] = torch.cuda.memory_allocated() / 1024**3
             row["torch_peak_vram_gb"] = torch.cuda.max_memory_allocated() / 1024**3
+        elif device_utils.accelerator() == "mps":
+            used = device_utils.allocated_gb()
+            if used is not None:
+                row["torch_vram_gb"] = used
+                row["torch_peak_vram_gb"] = used
         # Tokens/sec from TRL's cumulative token counter.
         if "num_tokens" in row and m.t_train:
             row["tokens_per_s"] = row["num_tokens"] / max(time.time() - m.t_train, 1e-6)

@@ -851,15 +851,17 @@ Passage:
 class QAGenerator:
     def __init__(self, model_id, load_4bit=False, batch_size=8, max_new_tokens=700):
         import torch
-        from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+        import device_utils
+        from transformers import AutoTokenizer, AutoModelForCausalLM
         self.torch = torch
         self.tok = AutoTokenizer.from_pretrained(model_id, padding_side="left")
         if self.tok.pad_token is None:
             self.tok.pad_token = self.tok.eos_token
-        quant = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4",
-                                   bnb_4bit_compute_dtype=torch.bfloat16) if load_4bit else None
-        self.model = AutoModelForCausalLM.from_pretrained(model_id, dtype=torch.bfloat16, quantization_config=quant,
-                                                          device_map={"": 0}).eval()
+        quant, note = device_utils.quant_config_4bit(load_4bit, "synthetic Q&A generation")
+        if note:
+            print(note)
+        self.model = device_utils.to_device(AutoModelForCausalLM.from_pretrained(
+            model_id, quantization_config=quant, **device_utils.model_load_kwargs()).eval())
         self.batch_size = batch_size
         self.max_new_tokens = max_new_tokens
 

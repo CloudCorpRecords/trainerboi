@@ -371,8 +371,9 @@ def run_stop(name: str):
     live = jread(os.path.join(d, "live", "status.json"))
     if live:
         pids.add(live.get("pid"))
+    import device_utils
     for pid in filter(None, pids):
-        subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True, creationflags=NOWIN)
+        device_utils.kill_pid(pid)
     if ap:
         ap["state"] = "stopped"
         for s in ap.get("steps", []):
@@ -551,10 +552,11 @@ def download(path: str):
 
 @app.post("/api/reveal")
 async def reveal(req: Request):
+    import device_utils
     b = await req.json()
     p = os.path.realpath(b.get("path", ""))
     if os.path.exists(p) and (p + os.sep).startswith(os.path.realpath(ROOT) + os.sep):
-        subprocess.Popen(["explorer", "/select,", p])
+        device_utils.reveal_in_file_manager(p)
     return {"ok": True}
 
 
@@ -611,14 +613,9 @@ async def chat(req: Request):
 
 @app.post("/api/chat/unload")
 def chat_unload():
-    import gc
+    import device_utils
     CHAT.update(id=None, model=None, tok=None)
-    gc.collect()
-    try:
-        import torch
-        torch.cuda.empty_cache()
-    except Exception:
-        pass
+    device_utils.empty_cache()
     return {"ok": True}
 
 
@@ -643,9 +640,8 @@ def share_start(mid: str):
 
 @app.post("/api/share/stop")
 def share_stop():
-    p = SHARE["proc"]
-    if p and p.poll() is None:
-        subprocess.run(["taskkill", "/PID", str(p.pid), "/T", "/F"], capture_output=True, creationflags=NOWIN)
+    import device_utils
+    device_utils.kill_tree(SHARE["proc"])
     SHARE["proc"] = None
     return {"state": "stopped"}
 
@@ -722,7 +718,8 @@ def math_stop(name: str):
     p = os.path.join(RUNS, name, "math", "status.json")
     st = jread(p)
     if st:
-        subprocess.run(["taskkill", "/PID", str(st.get("pid")), "/T", "/F"], capture_output=True, creationflags=NOWIN)
+        import device_utils
+        device_utils.kill_pid(st.get("pid"))
         st.update(state="stopped", phase="Stopped by you")
         with open(p, "w", encoding="utf-8") as f:
             json.dump(st, f)

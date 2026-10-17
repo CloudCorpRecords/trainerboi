@@ -11,6 +11,7 @@ import pandas as pd
 from datasets import Dataset
 from sentence_transformers import SentenceTransformer, SentenceTransformerTrainer, SentenceTransformerTrainingArguments
 from sentence_transformers.losses import MultipleNegativesRankingLoss
+import device_utils
 import trainer_utils
 
 def train_embedding_model(
@@ -22,12 +23,12 @@ def train_embedding_model(
     learning_rate=2e-5
 ):
     trainer_utils.clear_gpu_memory()
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = device_utils.accelerator()
     print("=" * 65)
     print("EMBEDDING & RAG MODEL FINE-TUNING PIPELINE")
     print("=" * 65)
     print(f"--> Base Model       : {model_id}")
-    print(f"--> Device           : {device} ({torch.cuda.get_device_name(0)})")
+    print(f"--> Device           : {device} ({device_utils.device_name()})")
     
     # Sample domain query-passage dataset if none provided
     if dataset_path and os.path.exists(dataset_path):
@@ -60,15 +61,18 @@ def train_embedding_model(
     loss = MultipleNegativesRankingLoss(model)
     
     os.makedirs(output_dir, exist_ok=True)
+    mp = device_utils.mixed_precision()
     training_args = SentenceTransformerTrainingArguments(
         output_dir=output_dir,
         num_train_epochs=epochs,
         per_device_train_batch_size=batch_size,
         learning_rate=learning_rate,
-        fp16=torch.cuda.is_available(),
+        bf16=mp["bf16"],
+        fp16=mp["fp16"],
         logging_steps=5,
         save_strategy="no",
-        report_to="none"
+        report_to="none",
+        **device_utils.extra_training_args(),
     )
     
     trainer = SentenceTransformerTrainer(
@@ -91,7 +95,7 @@ def train_embedding_model(
     return output_dir
 
 def compute_similarity(model_path_or_id, text_a, text_b):
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = device_utils.accelerator()
     model = SentenceTransformer(model_path_or_id, device=device)
     emb_a = model.encode(text_a, convert_to_tensor=True)
     emb_b = model.encode(text_b, convert_to_tensor=True)

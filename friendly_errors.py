@@ -4,10 +4,12 @@ explain(text) -> {"key", "title", "advice"} or None. Used by the Live and Guided
 """
 
 import re
+import sys
 
 # (key, regex, title, advice) - first match wins, so order from specific to generic.
 RULES = [
-    ("oom", r"out of memory|OutOfMemoryError|CUDA error: out of memory|CUBLAS_STATUS_ALLOC_FAILED",
+    ("oom", r"out of memory|OutOfMemoryError|CUDA error: out of memory|CUBLAS_STATUS_ALLOC_FAILED|"
+            r"MPS backend out of memory|Metal.*out of memory",
      "The GPU ran out of memory",
      "The model plus your settings needed more GPU memory than you have free. Close other programs that use the GPU "
      "(games, browsers with video, other training runs), then try a smaller model, a shorter max length, or batch size 1. "
@@ -60,12 +62,27 @@ RULES = [
      "Close other programs, or use a smaller model / dataset. Increasing the Windows paging file also helps."),
 ]
 
+# Advice that differs on macOS (Macs share one pool of unified memory; there is no NVIDIA driver).
+_MAC_ADVICE = {
+    "oom": ("The model plus your settings needed more memory than your Mac has free (Macs share one pool of memory "
+            "between the CPU and GPU). Quit other apps (browsers with video, other training runs), then try a smaller "
+            "model, a shorter max length, or batch size 1. Guided training does this automatically."),
+    "no_gpu": ("Training needs a GPU. On Apple Silicon Macs this means PyTorch with Metal (MPS) support — re-run setup.sh "
+               "to install the correct PyTorch build. CPU-only training works for tiny models but is very slow."),
+    "killed": ("Close other programs, or use a smaller model / dataset. Macs share one pool of memory between the CPU "
+               "and GPU, so quitting memory-hungry apps (browsers, video editors) helps the most."),
+    "locked": ("Close other programs that may have the file open (Finder previews, cloud-sync apps, another training run) "
+               "and retry."),
+}
+
 
 def explain(text):
     if not text:
         return None
     for key, rx, title, advice in RULES:
         if re.search(rx, text, re.I):
+            if sys.platform == "darwin" and key in _MAC_ADVICE:
+                advice = _MAC_ADVICE[key]
             return {"key": key, "title": title, "advice": advice}
     return None
 

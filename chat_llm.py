@@ -13,25 +13,29 @@ import argparse
 from threading import Thread
 
 import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig, TextIteratorStreamer
+from transformers import AutoTokenizer, AutoModelForCausalLM, TextIteratorStreamer
 
+import device_utils
 import llm_data
 from model_ids import resolve_base
 
 
 def load(model_path, load_4bit=False):
-    quant = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4",
-                               bnb_4bit_compute_dtype=torch.bfloat16) if load_4bit else None
+    quant, note = device_utils.quant_config_4bit(load_4bit, "chat")
+    if note:
+        print(note)
+    load_kw = device_utils.model_load_kwargs()
     adapter_cfg = os.path.join(model_path, "adapter_config.json")
     if os.path.exists(adapter_cfg):
         from peft import PeftModel
         with open(adapter_cfg) as f:
             base_id = resolve_base(json.load(f)["base_model_name_or_path"])
         print(f"--> Base {base_id} + adapter {model_path}")
-        model = AutoModelForCausalLM.from_pretrained(base_id, quantization_config=quant, dtype=torch.bfloat16, device_map={"": 0})
+        model = AutoModelForCausalLM.from_pretrained(base_id, quantization_config=quant, **load_kw)
         model = PeftModel.from_pretrained(model, model_path)
     else:
-        model = AutoModelForCausalLM.from_pretrained(model_path, quantization_config=quant, dtype=torch.bfloat16, device_map={"": 0})
+        model = AutoModelForCausalLM.from_pretrained(model_path, quantization_config=quant, **load_kw)
+    model = device_utils.to_device(model)
     tokenizer = AutoTokenizer.from_pretrained(model_path)
     return model.eval(), tokenizer
 

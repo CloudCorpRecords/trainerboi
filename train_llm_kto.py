@@ -13,6 +13,7 @@ import os
 import time
 import argparse
 
+import device_utils
 import trainer_utils
 import llm_data
 
@@ -53,7 +54,7 @@ def train_kto(args):
 
 def _train_kto(args, live):
     import torch
-    from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+    from transformers import AutoTokenizer, AutoModelForCausalLM
     from peft import LoraConfig
     from trl import KTOTrainer, KTOConfig
 
@@ -66,11 +67,13 @@ def _train_kto(args, live):
     live.phase("Loading model")
     tokenizer = llm_data.ensure_chat_template(AutoTokenizer.from_pretrained(args.model))
     live.tokenizer = tokenizer
-    quant = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_use_double_quant=True,
-                               bnb_4bit_compute_dtype=torch.bfloat16) if args.load_4bit else None
-    model = AutoModelForCausalLM.from_pretrained(args.model, quantization_config=quant, dtype=torch.bfloat16,
-                                                 device_map={"": 0}, attn_implementation="sdpa")
-    if args.load_4bit:
+    quant, note = device_utils.quant_config_4bit(args.load_4bit, "KTO")
+    if note:
+        print(note)
+    model = AutoModelForCausalLM.from_pretrained(args.model, quantization_config=quant, attn_implementation="sdpa",
+                                                 **device_utils.model_load_kwargs())
+    model = device_utils.to_device(model)
+    if quant is not None:
         model.enable_input_require_grads()
 
     live.phase("Loading dataset")
@@ -82,15 +85,18 @@ def _train_kto(args, live):
     print(f"--> Dataset: {len(train_ds)} train / {len(eval_ds) if eval_ds else 0} eval")
     live.phase("Tokenizing", train_rows=len(train_ds), eval_rows=len(eval_ds) if eval_ds else 0)
 
+    mp = device_utils.mixed_precision()
     config = KTOConfig(
         output_dir=args.output_dir, beta=args.beta,
         num_train_epochs=args.epochs, max_steps=args.max_steps or -1,
         per_device_train_batch_size=args.batch_size, gradient_accumulation_steps=args.grad_accum,
         learning_rate=args.lr, lr_scheduler_type="cosine", warmup_steps=0.05,
-        optim="paged_adamw_8bit", bf16=True, gradient_checkpointing=True,
+        optim=device_utils.training_optim(), bf16=mp["bf16"], fp16=mp["fp16"], gradient_checkpointing=True,
         max_length=args.max_len, logging_steps=5,
         eval_strategy="steps" if eval_ds is not None else "no", eval_steps=args.save_steps,
         save_steps=args.save_steps, save_total_limit=2, report_to=args.report_to, dataset_num_proc=1,
+        dataloader_pin_memory=device_utils.accelerator() == "cuda",
+        **device_utils.extra_training_args(),
     )
     trainer = KTOTrainer(
         model=model, args=config, train_dataset=train_ds, eval_dataset=eval_ds, processing_class=tokenizer,
@@ -103,13 +109,13 @@ def _train_kto(args, live):
     resume = get_last_checkpoint(args.output_dir) if args.resume and os.path.isdir(args.output_dir) else None
     result = trainer.train(resume_from_checkpoint=resume)
     print(f"--> Done in {time.time() - t0:.1f}s | loss {result.training_loss:.4f} "
-          f"| peak VRAM {torch.cuda.max_memory_allocated() / 1024**3:.2f} GB")
+          f"| peak memory {device_utils.peak_gb_text()}")
 
     final_dir = os.path.join(args.output_dir, "final")
     trainer.save_model(final_dir)
     tokenizer.save_pretrained(final_dir)
     print(f"--> Saved KTO adapter to {final_dir}")
-    live.finish(final_dir, train_loss=result.training_loss, peak_vram_gb=torch.cuda.max_memory_allocated() / 1024**3)
+    live.finish(final_dir, train_loss=result.training_loss, peak_vram_gb=device_utils.peak_gb())
     return final_dir
 
 

@@ -13,10 +13,24 @@ NVIDIA GPU - no code, no cloud, no account. A beginner can get a good result in 
 
 ## Install
 
-**Windows desktop installer** *(recommended)* - download `TrainerBoi Setup x.y.z.exe` from the Releases page. On first launch it detects your GPU and
+**Windows desktop installer** *(recommended on Windows)* - download `TrainerBoi Setup x.y.z.exe` from the Releases page. On first launch it detects your GPU and
 installs Python + the matching PyTorch for you (5-15 min, one time). Windows may show a SmartScreen warning for unsigned builds.
 
-**From source** (needs [uv](https://docs.astral.sh/uv/) and Node 20+; an NVIDIA GPU is strongly recommended):
+**macOS (Apple Silicon)** - from source (needs [uv](https://docs.astral.sh/uv/) and Node 20+; training uses Metal/MPS acceleration):
+
+```bash
+git clone https://github.com/CloudCorpRecords/trainerboi.git
+cd trainerboi
+./setup.sh       # Python 3.11 env + PyTorch with MPS + libraries + UI
+./START.sh       # opens http://127.0.0.1:7860     (or ./launch_desktop.sh for the Electron app)
+```
+
+Mac notes: 4-bit QLoRA, Unsloth and 8-bit optimizers need an NVIDIA GPU, so on a Mac they automatically fall back to
+full-precision LoRA with the HuggingFace backend (same steps, a little more memory). On a 16 GB Mac, LoRA fine-tuning up to
+~1.5B works well; 3B is tight and 7B needs a 32 GB+ machine. Guided training picks sizes for you. Run
+`./create_desktop_shortcut.sh` for a double-clickable Desktop launcher.
+
+**From source on Windows** (needs [uv](https://docs.astral.sh/uv/) and Node 20+; an NVIDIA GPU is strongly recommended):
 
 ```powershell
 git clone https://github.com/CloudCorpRecords/trainerboi.git
@@ -116,6 +130,7 @@ python chat_llm.py --model runs/sft/final
 ```
 
 **What fits in 16 GB** (seq 2048, rough): QLoRA up to ~8B, LoRA bf16 up to ~3B, full fine-tune up to ~0.5B, pretraining from scratch up to ~150M.
+On a 16 GB Mac (shared unified memory, no 4-bit): LoRA fp16 up to ~1.5B comfortably; 3B is tight.
 
 ### Making training easy
 * **Live training → ✨ Use recommended settings** (time budget → model, steps, learning rate, batch, length, with reasons).
@@ -148,9 +163,9 @@ Not built yet: program-aided maths (model writes Python that is executed), learn
 
 ## Desktop app
 
-* **Small installer (~90 MB).** First launch detects the GPU, downloads Python 3.11 and the matching PyTorch (CUDA 13.0 / 12.8 / 12.6 or CPU), then the libraries,
-  with a progress screen. Lives in `%APPDATA%\TrainerBoi` (runs and datasets in its `workspace` folder).
-* **Develop:** `cd desktop && npm install && npm start` (reuses the project's `.venv`; build the UI once with `cd ui && npm install && npm run build`). **Build:** `npm run dist` (builds the UI, stages the app, packs the installer) → `desktop/dist/TrainerBoi Setup <version>.exe` (needs Node 20+ and `uv` on the PATH).
+* **Small installer (~90 MB).** First launch detects the GPU, downloads Python 3.11 and the matching PyTorch (CUDA 13.0 / 12.8 / 12.6, Metal/MPS on Macs, or CPU), then the libraries,
+  with a progress screen. Lives in `%APPDATA%\TrainerBoi` on Windows (`~/Library/Application Support/TrainerBoi` on Macs; runs and datasets in its `workspace` folder).
+* **Develop:** `cd desktop && npm install && npm start` (reuses the project's `.venv`; build the UI once with `cd ui && npm install && npm run build`). **Build:** `npm run dist` (builds the UI, stages the app, packs the installer) → `desktop/dist/TrainerBoi Setup <version>.exe` (needs Node 20+ and `uv` on the PATH); `npm run dist:mac` builds the macOS `.dmg` the same way (unsigned builds need a right-click → Open on first launch).
 * **Release:** `npm run dist:release` - set `TB_UPDATE_URL` (folder hosting `latest.yml` + installer) for auto-update and `CSC_LINK` / `CSC_KEY_PASSWORD` to sign.
   Unsigned builds trigger SmartScreen warnings. Signing needs a machine where symlinks are allowed (Developer Mode or CI).
 * Bump `SETUP_VERSION` in `desktop/main.js` when `requirements-app.txt` changes. Menu: *TrainerBoi → Repair installation*. Logs: `desktop.log`, `studio.log`.

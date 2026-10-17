@@ -488,8 +488,9 @@ def stop(run):
     pids = {status.get("pid")}
     if run in PROCS:
         pids.add(PROCS[run].pid)
+    import device_utils
     for pid in filter(None, pids):
-        subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True)
+        device_utils.kill_pid(pid)
     if status:
         status.update(state="stopped", phase="Stopped by user")
         with open(status_path, "w", encoding="utf-8") as f:

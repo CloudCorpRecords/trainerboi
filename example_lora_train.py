@@ -1,6 +1,7 @@
 import torch
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 from peft import LoraConfig, get_peft_model, TaskType
+import device_utils
 
 def test_lora_setup():
     print("--> Initializing Hugging Face Transformers + PEFT LoRA test...")
@@ -22,9 +23,9 @@ def test_lora_setup():
     lora_model.print_trainable_parameters()
     
     # Send to GPU
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = device_utils.accelerator()
     lora_model.to(device)
-    print(f"--> LoRA model successfully moved to {device} ({torch.cuda.get_device_name(0)})")
+    print(f"--> LoRA model successfully moved to {device} ({device_utils.device_name()})")
     
     # Quick forward/backward pass test
     dummy_input = torch.randint(0, 1000, (4, 32), device=device)

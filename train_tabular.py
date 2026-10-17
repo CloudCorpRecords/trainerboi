@@ -1,7 +1,9 @@
 """
 train_tabular.py - High-speed GPU-accelerated tabular model training with XGBoost.
+Uses the NVIDIA GPU when one exists, otherwise the CPU.
 """
 
+import os
 import time
 import argparse
 import pandas as pd
@@ -9,6 +11,7 @@ import numpy as np
 import xgboost as xgb
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, classification_report, r2_score, mean_squared_error
+import device_utils
 import trainer_utils
 
 def generate_sample_dataset(n_samples=100000, n_features=25, is_classification=True):
@@ -52,14 +55,15 @@ def train_tabular_model(csv_path=None, target_col="target", task_type="classific
     
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     
+    xgb_dev = device_utils.xgb_device()
     print(f"--> Train set: {X_train.shape[0]:,} samples | Test set: {X_test.shape[0]:,} samples")
-    print("--> Training on the NVIDIA GPU (device='cuda', tree_method='hist')...")
+    print(f"--> Training with XGBoost (device='{xgb_dev}', tree_method='hist')...")
     
     t0 = time.time()
     
     if task_type.lower() == "classification":
         model = xgb.XGBClassifier(
-            device="cuda",
+            device=device_utils.xgb_device(),
             tree_method="hist",
             max_bin=256,
             subsample=0.8,
@@ -83,7 +87,7 @@ def train_tabular_model(csv_path=None, target_col="target", task_type="classific
         output_file = "model_xgboost_classifier.json"
     else:
         model = xgb.XGBRegressor(
-            device="cuda",
+            device=device_utils.xgb_device(),
             tree_method="hist",
             n_estimators=n_estimators,
             max_depth=max_depth,

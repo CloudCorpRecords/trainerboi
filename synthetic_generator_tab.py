@@ -9,6 +9,7 @@ import json
 import time
 import pandas as pd
 import gradio as gr
+import device_utils
 import trainer_utils
 
 def generate_synthetic_data(topic, style, num_examples, base_model_id):
@@ -39,27 +40,24 @@ def generate_synthetic_data(topic, style, num_examples, base_model_id):
     
     try:
         import torch
-        from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
-        
-        compute_dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
-        quant_config = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=compute_dtype
-        )
-        
+        from transformers import AutoTokenizer, AutoModelForCausalLM
+
+        quant_config, note = device_utils.quant_config_4bit(True, "the dataset generator")
+        if note:
+            print(note)
+
         tokenizer = AutoTokenizer.from_pretrained(base_model_id, trust_remote_code=True)
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
-            
+
         model = AutoModelForCausalLM.from_pretrained(
             base_model_id,
             quantization_config=quant_config,
-            torch_dtype=compute_dtype,
-            device_map="auto",
             attn_implementation="sdpa",
-            trust_remote_code=True
+            trust_remote_code=True,
+            **device_utils.model_load_kwargs(),
         )
+        model = device_utils.to_device(model)
         model.eval()
         
         for i, p in enumerate(selected_prompts):

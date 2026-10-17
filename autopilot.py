@@ -104,20 +104,23 @@ def model_size(model_id):
 
 def gpu_info():
     try:
-        import torch
-        if torch.cuda.is_available():
-            p = torch.cuda.get_device_properties(0)
-            return {"name": p.name, "vram_gb": p.total_memory / 1024**3, "bf16": torch.cuda.is_bf16_supported()}
+        import device_utils
+        return {"name": device_utils.device_name(), "vram_gb": device_utils.usable_memory_gb(),
+                "bf16": device_utils.is_bf16_supported(), "accelerator": device_utils.accelerator()}
     except Exception:
         pass
-    return {"name": "no CUDA GPU", "vram_gb": 0, "bf16": False}
+    return {"name": "no GPU", "vram_gb": 0, "bf16": False, "accelerator": "cpu"}
 
 
 def pick_model(goal, effort, vram_gb, override=None):
     if override:
         return override
     if effort == "best" and vram_gb >= 14 and GOALS[goal]["task"] == "sft":
-        return SFT_MODELS["best_big"]
+        import device_utils
+        # 7B in 4-bit fits a 16 GB NVIDIA card, but in full precision (Mac/CPU) it needs ~20 GB.
+        if device_utils.supports_4bit() or (vram_gb or 0) >= 20:
+            return SFT_MODELS["best_big"]
+        return SFT_MODELS["best"]
     if vram_gb and vram_gb < 7:
         return SFT_MODELS["quick"]
     return SFT_MODELS[effort]
@@ -130,11 +133,17 @@ def _fmt_min(sec):
 # ----------------------------------------------------------------------------- data plan
 def data_plan(goal, effort, has_user_data):
     """How the dataset will be prepared (before we know its size)."""
+    import device_utils
     g = GOALS[goal]
+    gen_model = GEN_MODELS[effort]
+    if ("7B" in gen_model and not device_utils.supports_4bit()
+            and device_utils.usable_memory_gb() < 20):
+        # 7B in full precision needs ~15 GB just to load; use the 3B helper on smaller machines.
+        gen_model = GEN_MODELS["balanced"]
     plan = {"format": g["format"], "synthetic": g["synthetic"] and has_user_data,
             "use_suggested": not has_user_data and bool(g["suggested"]),
             "hf": [] if has_user_data else list(g["suggested"]),  # your data only, else a proven public set
-            "max_rows": HF_ROWS[effort], "gen_model": GEN_MODELS[effort], "max_synth_chunks": SYNTH_CHUNKS[effort]}
+            "max_rows": HF_ROWS[effort], "gen_model": gen_model, "max_synth_chunks": SYNTH_CHUNKS[effort]}
     if goal == "scratch":
         plan["synthetic"] = False
     return plan
@@ -143,8 +152,10 @@ def data_plan(goal, effort, has_user_data):
 # ----------------------------------------------------------------------------- training plan
 def train_plan(goal, effort, stats=None, vram_gb=16.0, persona=None, model_override=None):
     """Full plan with reasons. `stats` = dataset stats.json (None before the data is built -> estimates)."""
+    import device_utils
     g = GOALS[goal]
     task = g["task"]
+    speed = device_utils.speed_factor()  # MPS/CPU train slower than the NVIDIA baseline
     budget = EFFORT[effort]["minutes"] * 60
     n = (stats or {}).get("train_examples") or {"quick": 2000, "balanced": 15000, "best": 60000}[effort]
     p95 = (stats or {}).get("tokens_p95") or 400
@@ -157,7 +168,7 @@ def train_plan(goal, effort, stats=None, vram_gb=16.0, persona=None, model_overr
         batch, accum, seq = (32, 2, 512) if size != "base" else (16, 4, 512)
         lr = {"tiny": 1e-3, "small": 8e-4, "base": 6e-4}[size]
         tok_per_step = batch * accum * seq
-        est = steps * tok_per_step / TOKENS_PER_SEC[size] + 60
+        est = steps * tok_per_step / (TOKENS_PER_SEC[size] * speed) + 60
         plan.update(size=size, max_steps=steps, batch_size=batch, grad_accum=accum, seq_len=seq, lr=lr,
                     sample_prompt=g["test_prompts"][0], sample_every=max(100, steps // 10))
         reasons += [
@@ -184,7 +195,7 @@ def train_plan(goal, effort, stats=None, vram_gb=16.0, persona=None, model_overr
     eff = batch * accum
     epochs = 3 if n < 1000 else 2 if n < 10000 else 1
     full_steps = math.ceil(epochs * n / eff)
-    sec_per_step = eff * min(mean_tok * 1.3, seq) / TOKENS_PER_SEC[size] * (2.2 if task == "dpo" else 1.0) + 0.35
+    sec_per_step = eff * min(mean_tok * 1.3, seq) / (TOKENS_PER_SEC[size] * speed) * (2.2 if task == "dpo" else 1.0) + 0.35
     budget_steps = int(budget / sec_per_step)
     steps = max(30, min(full_steps, budget_steps))
     lora_r = 32 if effort == "best" else 16
@@ -194,11 +205,16 @@ def train_plan(goal, effort, stats=None, vram_gb=16.0, persona=None, model_overr
                 save_steps=max(50, steps // 4), sample_every=max(25, steps // 6),
                 sample_prompt=g["test_prompts"][0], system_prompt=persona or g["system_prompt"] or None)
 
+    qlora = device_utils.supports_4bit()
     reasons += [
-        f"**Base model: {model}** — {'a strong 7B model (loaded in 4-bit so it fits your GPU)' if big else f'a {size} instruction-tuned model'}: "
+        f"**Base model: {model}** — {'a strong 7B model' + (' (loaded in 4-bit so it fits your GPU)' if qlora else ' (full precision)') if big else f'a {size} instruction-tuned model'}: "
         f"it already speaks well, so we only teach it *your* goal. Bigger = smarter but slower.",
-        "**Method: QLoRA** — the base model is frozen in compressed 4-bit form and we train small \"adapter\" layers on top. "
-        f"Uses far less memory and trains only ~{1 if lora_r == 16 else 2}% of the weights, with almost the same quality as full training.",
+        ("**Method: QLoRA** — the base model is frozen in compressed 4-bit form and we train small \"adapter\" layers on top. "
+         f"Uses far less memory and trains only ~{1 if lora_r == 16 else 2}% of the weights, with almost the same quality as full training."
+         if qlora else
+         "**Method: LoRA** — the base model is frozen and we train small \"adapter\" layers on top "
+         f"(only ~{1 if lora_r == 16 else 2}% of the weights), with almost the same quality as full training. "
+         "(4-bit QLoRA needs an NVIDIA GPU, so this machine uses full-precision weights.)"),
         f"**{steps:,} steps** of {eff} examples each ≈ **{plan['epochs_equiv']} pass(es)** over your {n:,} examples"
         + (" (capped to fit your time budget)." if steps < full_steps else "."),
         f"**Learning rate {lr:g}** — {'the standard, safe rate for LoRA adapters' if task == 'sft' else 'preference tuning needs a tiny rate so the model does not forget what it knows'}; "
@@ -221,10 +237,11 @@ def train_plan(goal, effort, stats=None, vram_gb=16.0, persona=None, model_overr
 
 
 def data_estimate_sec(goal, effort, has_user_data):
+    import device_utils
     dp = data_plan(goal, effort, has_user_data)
     sec = 60
     if dp["synthetic"]:
-        sec += dp["max_synth_chunks"] * SYNTH_SEC_PER_CHUNK[effort] + 90
+        sec += dp["max_synth_chunks"] * SYNTH_SEC_PER_CHUNK[effort] / device_utils.speed_factor() + 90
     elif dp["hf"]:
         sec += 60
     return sec
@@ -248,7 +265,9 @@ def summary_text(goal, effort, has_user_data, vram_gb, persona=None, model_overr
     if tp["task"] == "pretrain":
         steps.append(f"**2. Train** — build a new *{tp['size']}* model and train it for {tp['max_steps']:,} steps.")
     else:
-        steps.append(f"**2. Train** — fine-tune **{tp['model'].split('/')[-1]}** with QLoRA for about {tp['max_steps']:,} steps "
+        import device_utils
+        method = "QLoRA" if device_utils.supports_4bit() else "LoRA"
+        steps.append(f"**2. Train** — fine-tune **{tp['model'].split('/')[-1]}** with {method} for about {tp['max_steps']:,} steps "
                      "(adjusted once we know your data size).")
     steps.append("**3. Test** — ask the model the same questions before and after training so you can compare.")
     total = data_estimate_sec(goal, effort, has_user_data) + tp["estimate"]["train_sec"] + 90

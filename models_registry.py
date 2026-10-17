@@ -220,7 +220,12 @@ from threading import Thread
 here = os.path.dirname(os.path.abspath(__file__))
 tok = AutoTokenizer.from_pretrained(here)
 cfg = os.path.join(here, "adapter_config.json")
-dev = "cuda" if torch.cuda.is_available() else "cpu"
+if torch.cuda.is_available():
+    dev = "cuda"
+elif getattr(torch.backends, "mps", None) is not None and torch.backends.mps.is_available():
+    dev = "mps"
+else:
+    dev = "cpu"
 if os.path.exists(cfg):
     from peft import PeftModel
     base = json.load(open(cfg))["base_model_name_or_path"]
@@ -344,8 +349,9 @@ def publish_to_hub(pkg, repo_id, private=True, token=None):
     try:
         who = api.whoami()["name"]
     except Exception:
+        _hf_login = "hf auth login" if os.name != "nt" else ".venv\\Scripts\\hf.exe auth login"
         raise RuntimeError("Not signed in to Hugging Face. Paste an access token with *write* permission "
-                           "(huggingface.co/settings/tokens) or run `.venv\\Scripts\\hf.exe auth login` once.")
+                           f"(huggingface.co/settings/tokens) or run `{_hf_login}` once.")
     if "/" not in repo_id:
         repo_id = f"{who}/{repo_id}"
     api.create_repo(repo_id, private=private, exist_ok=True, repo_type="model")

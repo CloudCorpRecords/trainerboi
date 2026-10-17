@@ -8,14 +8,16 @@ const net = require('net');
 
 const DEV_ROOT = path.resolve(__dirname, '..');                       // repo checkout (dev mode)
 const IS_DEV = !app.isPackaged;
+const IS_WIN = process.platform === 'win32';
+const UV_NAME = IS_WIN ? 'uv.exe' : 'uv';
 const SRC_DIR = IS_DEV ? DEV_ROOT : path.join(process.resourcesPath, 'app-src');
-const UV = IS_DEV && !fs.existsSync(path.join(DEV_ROOT, 'desktop', 'stage', 'bin', 'uv.exe'))
-  ? 'uv' : path.join(IS_DEV ? path.join(DEV_ROOT, 'desktop', 'stage') : process.resourcesPath, 'bin', 'uv.exe');
-const DATA = app.getPath('userData');                                 // %APPDATA%/TrainerBoi
+const UV = IS_DEV && !fs.existsSync(path.join(DEV_ROOT, 'desktop', 'stage', 'bin', UV_NAME))
+  ? 'uv' : path.join(IS_DEV ? path.join(DEV_ROOT, 'desktop', 'stage') : process.resourcesPath, 'bin', UV_NAME);
+const DATA = app.getPath('userData');                                 // %APPDATA%/TrainerBoi (Win) or ~/Library/Application Support/TrainerBoi (Mac)
 const ENV_DIR = path.join(DATA, 'env');
 const WORK_DIR = path.join(DATA, 'workspace');                        // code copy + runs/ + data/ live here
 const READY = path.join(ENV_DIR, '.ready.json');
-const SETUP_VERSION = 4;                                              // bump when requirements change
+const SETUP_VERSION = 5;                                              // bump when requirements change
 const LOG = path.join(DATA, 'desktop.log');
 
 let win = null, setupWin = null, backend = null, port = 0, quitting = false;
@@ -26,8 +28,8 @@ function log(...a) {
   console.log(...a);
 }
 
-const pyExe = () => path.join(ENV_DIR, 'Scripts', 'python.exe');
-const devVenvPy = () => path.join(DEV_ROOT, '.venv', 'Scripts', 'python.exe');
+const pyExe = () => IS_WIN ? path.join(ENV_DIR, 'Scripts', 'python.exe') : path.join(ENV_DIR, 'bin', 'python');
+const devVenvPy = () => IS_WIN ? path.join(DEV_ROOT, '.venv', 'Scripts', 'python.exe') : path.join(DEV_ROOT, '.venv', 'bin', 'python');
 // In dev we reuse the project's existing .venv so nothing has to be reinstalled.
 const useDevVenv = () => IS_DEV && fs.existsSync(devVenvPy()) && !process.env.TB_FORCE_SETUP;
 const pythonPath = () => (useDevVenv() ? devVenvPy() : pyExe());
@@ -68,7 +70,14 @@ function detectGpu() {
     // PyTorch wheels: cu130 needs driver >= 580, cu128 >= 570, cu126 >= 560.
     const cuda = major >= 580 ? 'cu130' : major >= 570 ? 'cu128' : major >= 560 ? 'cu126' : null;
     return { name, driver, cuda };
-  } catch (e) { return null; }
+  } catch (e) { /* no NVIDIA GPU */ }
+  if (process.platform === 'darwin') {
+    // Apple Silicon trains via Metal (MPS), which PyTorch's default wheels include.
+    const os = require('os');
+    const chip = ((os.cpus()[0] || {}).model || 'Apple Silicon').replace(/\s+/g, ' ').trim();
+    return { name: `${chip} (Metal/MPS)`, driver: '', cuda: null, mps: true };
+  }
+  return null;
 }
 
 function send(channel, payload) { if (setupWin && !setupWin.isDestroyed()) setupWin.webContents.send(channel, payload); }
@@ -105,7 +114,10 @@ async function setup() {
   await new Promise((r) => setupWin.webContents.once('did-finish-load', r));
 
   const gpu = detectGpu();
-  send('setup-gpu', gpu ? `${gpu.name} (driver ${gpu.driver})${gpu.cuda ? '' : ' - driver is old, using CPU build'}` : 'No NVIDIA GPU found - using the CPU build (small models only)');
+  const gpuMsg = !gpu ? 'No NVIDIA GPU found - using the CPU build (small models only)'
+    : gpu.mps ? `${gpu.name} - using PyTorch with Metal acceleration`
+    : `${gpu.name} (driver ${gpu.driver})${gpu.cuda ? '' : ' - driver is old, using CPU build'}`;
+  send('setup-gpu', gpuMsg);
   const steps = ['Prepare Python', 'Install PyTorch', 'Install TrainerBoi libraries', 'GPU speed-ups', 'Finish'];
   send('setup-steps', steps);
 
@@ -118,11 +130,30 @@ async function setup() {
   const py = pyExe();
 
   step(1);
-  const index = gpu && gpu.cuda ? `https://download.pytorch.org/whl/${gpu.cuda}` : 'https://download.pytorch.org/whl/cpu';
-  await run(UV, ['pip', 'install', '--python', py, 'torch', 'torchvision', 'torchaudio', '--index-url', index], 'PyTorch install');
+  // macOS: default PyPI wheels already include Metal (MPS) - never use the CPU index there.
+  const torchArgs = ['pip', 'install', '--python', py, 'torch', 'torchvision', 'torchaudio'];
+  if (gpu && gpu.cuda) torchArgs.push('--index-url', `https://download.pytorch.org/whl/${gpu.cuda}`);
+  else if (process.platform !== 'darwin') torchArgs.push('--index-url', 'https://download.pytorch.org/whl/cpu');
+  await run(UV, torchArgs, 'PyTorch install');
 
   step(2);
   await run(UV, ['pip', 'install', '--python', py, '-r', path.join(SRC_DIR, 'requirements-app.txt')], 'Library install');
+
+  if (process.platform === 'darwin') {
+    // XGBoost needs libomp.dylib: Homebrew users have it; everyone else reuses PyTorch's bundled copy.
+    const copyLibomp = [
+      'import os, shutil, sys',
+      `dest = ${JSON.stringify(path.join(ENV_DIR, 'lib', 'libomp.dylib'))}`,
+      'src = ""',
+      'try:\n import torch; p = os.path.join(os.path.dirname(torch.__file__), "lib", "libomp.dylib"); src = p if os.path.exists(p) else ""\n'
+        + 'except Exception: pass',
+      'if not src:\n try:\n  import sklearn; p = os.path.join(os.path.dirname(sklearn.__file__), ".dylibs", "libomp.dylib"); src = p if os.path.exists(p) else ""\n'
+        + ' except Exception: pass',
+      'try:\n import xgboost; print("xgboost imports already")\nexcept Exception:\n'
+        + ' os.makedirs(os.path.dirname(dest), exist_ok=True);\n shutil.copyfile(src, dest) if src else sys.exit("no bundled libomp found"); print("installed", dest)',
+    ].join('\n');
+    await run(py, ['-c', copyLibomp], 'OpenMP runtime', { allowFail: true });
+  }
 
   step(3);
   if (gpu && gpu.cuda && process.platform === 'win32') {
@@ -143,7 +174,14 @@ async function startBackend() {
   port = await freePort();
   const env = { ...process.env, TB_PORT: String(port), TB_NO_BROWSER: '1', PYTHONIOENCODING: 'utf-8', PYTHONUNBUFFERED: '1',
     PYTHONWARNINGS: 'ignore', HF_HUB_DISABLE_TELEMETRY: '1', GRADIO_ANALYTICS_ENABLED: 'False',
+    PYTORCH_ENABLE_MPS_FALLBACK: '1',
     HF_HOME: process.env.HF_HOME || path.join(DATA, 'hf-cache') };
+  if (process.platform === 'darwin') {
+    const libDir = path.join(useDevVenv() ? path.join(DEV_ROOT, '.venv') : ENV_DIR, 'lib');
+    if (fs.existsSync(path.join(libDir, 'libomp.dylib'))) {
+      env.DYLD_LIBRARY_PATH = libDir + (env.DYLD_LIBRARY_PATH ? `:${env.DYLD_LIBRARY_PATH}` : '');
+    }
+  }
   log('Starting Studio on port', port, 'python', pythonPath());
   const out = fs.openSync(path.join(DATA, 'studio.log'), 'w');
   backend = spawn(pythonPath(), ['-u', 'studio_server.py', '--port', String(port)], { cwd: appDir(), env, windowsHide: true, stdio: ['ignore', out, out] });
@@ -153,8 +191,16 @@ async function startBackend() {
 
 function stopBackend() {
   if (!backend) return;
-  try { execFile('taskkill', ['/PID', String(backend.pid), '/T', '/F'], { windowsHide: true }); } catch (e) { /* ignore */ }
+  const proc = backend;
   backend = null;
+  try {
+    if (process.platform === 'win32') {
+      execFile('taskkill', ['/PID', String(proc.pid), '/T', '/F'], { windowsHide: true });
+    } else {
+      proc.kill();
+      setTimeout(() => { try { proc.kill('SIGKILL'); } catch (e) { /* already gone */ } }, 5000).unref();
+    }
+  } catch (e) { /* ignore */ }
 }
 
 function showCrash(code) {

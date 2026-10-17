@@ -92,14 +92,9 @@ def _load(rec):
 
 
 def unload():
-    import gc
+    import device_utils
     _CHAT.update(id=None, model=None, tok=None)
-    gc.collect()
-    try:
-        import torch
-        torch.cuda.empty_cache()
-    except Exception:
-        pass
+    device_utils.empty_cache()
     return "Model unloaded - GPU memory is free."
 
 
@@ -180,9 +175,8 @@ def start_share(mid):
 
 
 def stop_share():
-    p = _SHARE["proc"]
-    if p and p.poll() is None:
-        subprocess.run(["taskkill", "/PID", str(p.pid), "/T", "/F"], capture_output=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    import device_utils
+    device_utils.kill_tree(_SHARE["proc"])
     _SHARE.update(proc=None)
     return share_status()
 
@@ -246,8 +240,9 @@ def build_tab():
                             zip_file = gr.File(label="Your zip")
                             zip_md = gr.Markdown()
                         with gr.Accordion("🤗 Publish on Hugging Face", open=False):
+                            _hf_login = "hf auth login" if os.name != "nt" else ".venv\\Scripts\\hf.exe auth login"
                             gr.Markdown("Free hosting with a shareable link. Needs a Hugging Face account and an access token with **write** permission "
-                                        "(or run `.venv\\Scripts\\hf.exe auth login` once and leave the token empty). "
+                                        f"(or run `{_hf_login}` once and leave the token empty). "
                                         "Check the base model's licence first - the model card shows it.")
                             with gr.Row():
                                 repo = gr.Textbox(label="Name on the Hub", placeholder="my-model  (or  username/my-model)")

@@ -6,7 +6,10 @@ on:
 
 jobs:
   checks:
-    runs-on: windows-latest
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
@@ -14,6 +17,13 @@ jobs:
         with: { python-version: "3.11" }
       - name: Python syntax check
         run: python -m compileall -q .
+      - name: Unit tests (no dependencies needed)
+        run: python -m unittest discover -s tests -v
+
+      - name: Shell script syntax check
+        if: runner.os == 'macOS'
+        shell: bash
+        run: bash -n setup.sh && bash -n START.sh && bash -n scripts/setup.sh
 
       - uses: actions/setup-node@v4
         with: { node-version: 22 }

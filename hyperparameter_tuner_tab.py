@@ -1,6 +1,6 @@
 """
 hyperparameter_tuner_tab.py - Automated Hyperparameter Optimization Studio (Powered by Optuna).
-Uses Bayesian Optimization (TPE) on CUDA to automatically find the highest-performing training parameters.
+Uses Bayesian Optimization (TPE) to automatically find the highest-performing training parameters.
 """
 
 import time
@@ -11,6 +11,7 @@ import xgboost as xgb
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 import train_tabular
+import device_utils
 import trainer_utils
 
 # Silence optuna logs to avoid clutter
@@ -42,7 +43,7 @@ def run_bayesian_optimization(task_type, n_trials, csv_file):
         subsample = trial.suggest_float("subsample", 0.6, 1.0)
         
         clf = xgb.XGBClassifier(
-            device="cuda",
+            device=device_utils.xgb_device(),
             tree_method="hist",
             max_bin=256,
             learning_rate=lr,

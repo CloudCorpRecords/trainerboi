@@ -15,9 +15,10 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from typing import List, Optional, Union, Dict, Any
 
-from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig, TextIteratorStreamer
+from transformers import AutoTokenizer, AutoModelForCausalLM, TextIteratorStreamer
 from peft import PeftModel
 from threading import Thread
+import device_utils
 import trainer_utils
 
 app = FastAPI(title="TrainerBoi OpenAI-Compatible Inference API", version="1.0.0")
@@ -41,12 +42,8 @@ def get_or_load_model(model_name: str):
         return _LOADED_MODEL, _LOADED_TOKENIZER
         
     trainer_utils.clear_gpu_memory()
-    compute_dtype = torch.bfloat16 if (torch.cuda.is_available() and torch.cuda.is_bf16_supported()) else torch.float16
-    quant_config = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_quant_type="nf4",
-        bnb_4bit_compute_dtype=compute_dtype
-    ) if torch.cuda.is_available() else None
+    quant_config, _ = device_utils.quant_config_4bit(device_utils.supports_4bit(), "the API server")
+    load_kw = device_utils.model_load_kwargs()
 
     adapter_cfg = os.path.join(model_name, "adapter_config.json")
     if os.path.exists(adapter_cfg):
@@ -56,10 +53,9 @@ def get_or_load_model(model_name: str):
         base = AutoModelForCausalLM.from_pretrained(
             base_id,
             quantization_config=quant_config,
-            torch_dtype=compute_dtype,
-            device_map="auto",
             attn_implementation="sdpa",
-            trust_remote_code=True
+            trust_remote_code=True,
+            **load_kw,
         )
         model = PeftModel.from_pretrained(base, model_name)
     else:
@@ -67,11 +63,11 @@ def get_or_load_model(model_name: str):
         model = AutoModelForCausalLM.from_pretrained(
             model_name,
             quantization_config=quant_config,
-            torch_dtype=compute_dtype,
-            device_map="auto" if torch.cuda.is_available() else None,
-            attn_implementation="sdpa" if torch.cuda.is_available() else None,
-            trust_remote_code=True
+            attn_implementation="sdpa",
+            trust_remote_code=True,
+            **load_kw,
         )
+    model = device_utils.to_device(model)
         
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -99,7 +95,7 @@ def root():
     return {
         "status": "online",
         "service": "TrainerBoi OpenAI-Compatible API",
-        "device": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU",
+        "device": device_utils.device_name(),
         "docs": "http://127.0.0.1:8000/docs"
     }
 

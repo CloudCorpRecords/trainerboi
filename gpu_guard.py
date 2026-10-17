@@ -6,8 +6,10 @@ once they run very hot. Two tools:
 
   ThermalGuard   pauses training when the GPU reaches TB_MAX_GPU_TEMP (default 82 °C) and resumes once it has
                  cooled by 5 °C. Used automatically by live_monitor.py in every training script. Set
-                 TB_MAX_GPU_TEMP=0 to disable.
+                 TB_MAX_GPU_TEMP=0 to disable. (On Macs the temperature can't be read without root, so the
+                 guard stays idle; macOS throttles a hot chip itself.)
   health_check   a stress test that repeats identical GPU work and verifies the results never change.
+                 Runs on CUDA, Apple MPS, or CPU.
                  python gpu_guard.py --check 180          (writes gpu_health.json)
 """
 
@@ -18,10 +20,13 @@ import time
 import argparse
 import subprocess
 
+import device_utils
+
 HEALTH_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gpu_health.json")
 
 
 def gpu_temp():
+    """GPU temperature in °C, or None when it can't be read (Macs, CPU-only machines)."""
     try:
         out = subprocess.run(["nvidia-smi", "--query-gpu=temperature.gpu", "--format=csv,noheader,nounits"],
                              capture_output=True, text=True, timeout=5,
@@ -66,11 +71,7 @@ class ThermalGuard:
         start = time.time()
         if self.on_pause:
             self.on_pause(t)
-        try:
-            import torch
-            torch.cuda.synchronize()
-        except Exception:
-            pass
+        device_utils.synchronize()
         while True:
             time.sleep(1.0)
             t = gpu_temp()
@@ -93,23 +94,39 @@ def wait_until_cool(target=70.0, timeout=600):
 
 
 def health_check(seconds=180, progress=None):
-    """Repeat identical GPU work; any change in results means the GPU is computing incorrectly."""
+    """Repeat identical accelerator work; any change in results means it is computing incorrectly."""
+    import contextlib
     import torch
     import torch.nn.functional as F
-    from torch.nn.attention import sdpa_kernel, SDPBackend
+    dev = device_utils.accelerator()
+    if dev == "cpu":
+        result = {"stable": True, "skipped": "no GPU", "device": device_utils.device_name(),
+                  "errors": 0, "iterations": 0, "seconds": 0, "max_temp": None, "first_error_temp": None,
+                  "checked_at": time.strftime("%Y-%m-%d %H:%M:%S")}
+        with open(HEALTH_FILE, "w") as f:
+            json.dump(result, f, indent=1)
+        return result
+    # bf16 matmul is solid on CUDA; MPS is most reliable in fp16.
+    dtype = torch.bfloat16 if dev == "cuda" else torch.float16
     torch.manual_seed(0)
-    a = torch.randn(4096, 4096, device="cuda", dtype=torch.bfloat16)
-    b = torch.randn(4096, 4096, device="cuda", dtype=torch.bfloat16)
-    q, k, v = (torch.randn(8, 14, 1024, 64, device="cuda", dtype=torch.bfloat16) for _ in range(3))
-    mem = torch.randn(128 * 1024 * 1024 // 2, device="cuda", dtype=torch.bfloat16)
+    a = torch.randn(4096, 4096, device=dev, dtype=dtype)
+    b = torch.randn(4096, 4096, device=dev, dtype=dtype)
+    q, k, v = (torch.randn(8, 14, 1024, 64, device=dev, dtype=dtype) for _ in range(3))
+    mem = torch.randn(128 * 1024 * 1024 // 2, device=dev, dtype=dtype)
+
+    if dev == "cuda":
+        from torch.nn.attention import sdpa_kernel, SDPBackend
+        attn = sdpa_kernel(SDPBackend.EFFICIENT_ATTENTION)
+    else:
+        attn = contextlib.nullcontext()  # MPS uses its own SDPA path
 
     def work():
-        with sdpa_kernel(SDPBackend.EFFICIENT_ATTENTION):
+        with attn:
             o = F.scaled_dot_product_attention(q, k, v, is_causal=True)
         return a @ b, o, mem * 1.5 + 0.25
 
     ref = [t.clone() for t in work()]
-    torch.cuda.synchronize()
+    device_utils.synchronize()
     names = ["matrix math", "attention", "memory"]
     bad = dict.fromkeys(names, 0)
     t0, it, temps, first_error_temp = time.time(), 0, [], None
@@ -125,7 +142,8 @@ def health_check(seconds=180, progress=None):
             if progress:
                 progress(time.time() - t0, seconds, temps[-1], sum(bad.values()))
     errors = sum(bad.values())
-    result = {"stable": errors == 0, "errors": errors, "by_type": bad, "iterations": it, "seconds": round(time.time() - t0),
+    result = {"stable": errors == 0, "device": device_utils.device_name(), "errors": errors, "by_type": bad,
+              "iterations": it, "seconds": round(time.time() - t0),
               "max_temp": max((t for t in temps if t), default=None), "first_error_temp": first_error_temp,
               "checked_at": time.strftime("%Y-%m-%d %H:%M:%S")}
     with open(HEALTH_FILE, "w") as f:
@@ -137,9 +155,12 @@ def explain(result):
     """Plain-English verdict + advice."""
     if not result:
         return "No health check yet."
+    if result.get("skipped"):
+        return "No GPU found, so there was nothing to stress-test — training will use the CPU (slow but fine for tiny models)."
     if result["stable"]:
-        return (f"✅ **Your GPU computed correctly** — {result['iterations']:,} identical runs over {result['seconds']}s, "
-                f"peaking at {result['max_temp']:.0f} °C.")
+        temp = f", peaking at {result['max_temp']:.0f} °C" if result.get("max_temp") else ""
+        return (f"✅ **Your {result.get('device') or 'GPU'} computed correctly** — {result['iterations']:,} identical runs "
+                f"over {result['seconds']}s{temp}.")
     t = result.get("first_error_temp")
     return (f"⚠️ **Your GPU made {result['errors']} calculation error(s)** while under full load"
             + (f" (first one at about {t:.0f} °C)" if t else "") + ". This is a hardware/cooling problem, not your data or "

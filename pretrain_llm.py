@@ -18,6 +18,7 @@ import math
 import time
 import argparse
 
+import device_utils
 import trainer_utils
 import llm_data
 
@@ -60,7 +61,7 @@ def _pretrain(args, live):
         rope_theta=10000.0,
         **PRESETS[args.size],
     )
-    model = LlamaForCausalLM(config).to(dtype=torch.bfloat16 if args.pure_bf16 else torch.float32)
+    model = LlamaForCausalLM(config).to(dtype=device_utils.low_precision_dtype() if args.pure_bf16 else torch.float32)
     n_params = sum(p.numel() for p in model.parameters())
     print("=" * 65)
     print(f"PRETRAIN FROM SCRATCH | {args.size} | {n_params / 1e6:.1f}M params | seq_len {args.seq_len}")
@@ -87,6 +88,9 @@ def _pretrain(args, live):
     splits = ds.train_test_split(test_size=0.005, seed=42)
     print(f"--> {len(splits['train'])} training blocks = {len(splits['train']) * args.seq_len / 1e6:.1f}M tokens")
 
+    mp = device_utils.mixed_precision()
+    if args.compile and not device_utils.allow_compile():
+        print(f"--> torch.compile only helps on NVIDIA GPUs; skipping it on {device_utils.device_label()}.")
     targs = TrainingArguments(
         output_dir=args.output_dir,
         max_steps=args.max_steps,
@@ -99,10 +103,11 @@ def _pretrain(args, live):
         weight_decay=0.1,
         adam_beta2=0.95,
         max_grad_norm=1.0,
-        optim="adamw_torch_fused",
-        bf16=not args.pure_bf16,
-        tf32=True,
-        torch_compile=args.compile,
+        optim=device_utils.training_optim(want_8bit=False),
+        bf16=mp["bf16"] and not args.pure_bf16,
+        fp16=mp["fp16"] and not args.pure_bf16,
+        tf32=device_utils.allow_tf32(),
+        torch_compile=args.compile and device_utils.allow_compile(),
         logging_steps=10,
         eval_strategy="steps",
         eval_steps=args.save_steps,
@@ -110,6 +115,8 @@ def _pretrain(args, live):
         save_total_limit=2,
         report_to=args.report_to,
         dataloader_num_workers=0,
+        dataloader_pin_memory=device_utils.accelerator() == "cuda",
+        **device_utils.extra_training_args(),
     )
     trainer = Trainer(model=model, args=targs, train_dataset=splits["train"], eval_dataset=splits["test"],
                       data_collator=DataCollatorForLanguageModeling(tokenizer, mlm=False),
@@ -131,12 +138,12 @@ def _pretrain(args, live):
     # Quick sample so you can see what it learned.
     model.eval()
     prompt = tokenizer(args.sample_prompt, return_tensors="pt").to(model.device)
-    with torch.no_grad(), torch.autocast("cuda", dtype=torch.bfloat16):
+    with torch.no_grad(), device_utils.autocast():
         out = model.generate(**prompt, max_new_tokens=80, do_sample=True, temperature=0.8, top_p=0.95)
     print("--> Sample:", tokenizer.decode(out[0], skip_special_tokens=True))
     print(f"--> Saved to {final_dir}")
     live.finish(final_dir, eval_loss=ev["eval_loss"], perplexity=math.exp(ev["eval_loss"]),
-                peak_vram_gb=torch.cuda.max_memory_allocated() / 1024**3)
+                peak_vram_gb=device_utils.peak_gb())
     return final_dir
 
 

@@ -235,7 +235,9 @@ def _main(job, cfg):
     if plan["task"] == "pretrain":
         detail = f"New {plan['size']} model · {plan['max_steps']:,} steps"
     else:
-        detail = f"{plan['model'].split('/')[-1]} + QLoRA · {plan['max_steps']:,} steps · ~{autopilot._fmt_min(plan['estimate']['train_sec'])}"
+        import device_utils
+        method = "QLoRA" if device_utils.supports_4bit() else "LoRA"
+        detail = f"{plan['model'].split('/')[-1]} + {method} · {plan['max_steps']:,} steps · ~{autopilot._fmt_min(plan['estimate']['train_sec'])}"
     job.step("plan", "done", detail)
 
     # ------------------------------------------------------------------ 4. train
@@ -375,7 +377,8 @@ def _test_prompts(ds_name, g, plan, k=4):
 
 def compare(job, plan, final_dir, ds_name, g):
     import torch
-    from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+    import device_utils
+    from transformers import AutoTokenizer, AutoModelForCausalLM
     prompts = _test_prompts(ds_name, g, plan)
     pairs = [{"prompt": p, "reference": ref} for p, ref in prompts]
 
@@ -397,17 +400,19 @@ def compare(job, plan, final_dir, ds_name, g):
 
     if plan["task"] == "pretrain":
         tok = AutoTokenizer.from_pretrained(final_dir)
-        model = AutoModelForCausalLM.from_pretrained(final_dir, dtype=torch.bfloat16, device_map={"": 0}).eval()
+        model = device_utils.to_device(AutoModelForCausalLM.from_pretrained(
+            final_dir, **device_utils.model_load_kwargs()).eval())
         for p, o in zip(pairs, gen(model, tok, chat=False)):
             p["before"] = "(a brand-new model knows nothing before training — it would output random tokens)"
             p["after"] = o
         return {"pairs": pairs, "model_dir": final_dir}
 
-    quant = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4",
-                               bnb_4bit_compute_dtype=torch.bfloat16) if "7B" in plan["model"] else None
+    quant, note = device_utils.quant_config_4bit("7B" in plan["model"], "the before/after test")
+    if note:
+        job.say(note)
     tok = AutoTokenizer.from_pretrained(final_dir)
-    base = AutoModelForCausalLM.from_pretrained(plan["model"], dtype=torch.bfloat16, quantization_config=quant,
-                                                device_map={"": 0}).eval()
+    base = device_utils.to_device(AutoModelForCausalLM.from_pretrained(
+        plan["model"], quantization_config=quant, **device_utils.model_load_kwargs()).eval())
     job.say("generating BEFORE answers")
     before = gen(base, tok)
     from peft import PeftModel

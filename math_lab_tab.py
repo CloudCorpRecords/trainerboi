@@ -68,10 +68,10 @@ def stop(name):
     st = _status(name) if name else None
     if not st:
         return
+    import device_utils
     pids = {st.get("pid")} | ({PROCS[name].pid} if name in PROCS else set())
     for pid in sorted(filter(None, pids), key=lambda x: x != (PROCS[name].pid if name in PROCS else None)):  # supervisor first
-        subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True,
-                       creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        device_utils.kill_pid(pid)
     st.update(state="stopped", phase="Stopped by you")
     with open(os.path.join(ROOT, "runs", name, "math", "status.json"), "w", encoding="utf-8") as f:
         json.dump(st, f)

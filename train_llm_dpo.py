@@ -12,6 +12,7 @@ import os
 import time
 import argparse
 
+import device_utils
 import trainer_utils
 import llm_data
 
@@ -26,7 +27,7 @@ def train_dpo(args):
 
 def _train_dpo(args, live):
     import torch
-    from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+    from transformers import AutoTokenizer, AutoModelForCausalLM
     from peft import LoraConfig, prepare_model_for_kbit_training
     from trl import DPOTrainer, DPOConfig
 
@@ -39,11 +40,13 @@ def _train_dpo(args, live):
     live.phase("Loading model")
     tokenizer = llm_data.ensure_chat_template(AutoTokenizer.from_pretrained(args.model))
     live.tokenizer = tokenizer
-    quant = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_use_double_quant=True,
-                               bnb_4bit_compute_dtype=torch.bfloat16) if args.load_4bit else None
-    model = AutoModelForCausalLM.from_pretrained(args.model, quantization_config=quant, dtype=torch.bfloat16,
-                                                 device_map={"": 0}, attn_implementation="sdpa")
-    if args.load_4bit:
+    quant, note = device_utils.quant_config_4bit(args.load_4bit, "DPO")
+    if note:
+        print(note)
+    model = AutoModelForCausalLM.from_pretrained(args.model, quantization_config=quant, attn_implementation="sdpa",
+                                                 **device_utils.model_load_kwargs())
+    model = device_utils.to_device(model)
+    if quant is not None:
         model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=True)
 
     live.phase("Loading dataset")
@@ -54,6 +57,7 @@ def _train_dpo(args, live):
     print(f"--> Dataset: {len(train_ds)} train / {len(eval_ds) if eval_ds else 0} eval")
     live.phase("Tokenizing", train_rows=len(train_ds), eval_rows=len(eval_ds) if eval_ds else 0)
 
+    mp = device_utils.mixed_precision()
     config = DPOConfig(
         output_dir=args.output_dir,
         beta=args.beta,
@@ -64,8 +68,9 @@ def _train_dpo(args, live):
         learning_rate=args.lr,
         lr_scheduler_type="cosine",
         warmup_steps=0.05,
-        optim="paged_adamw_8bit",
-        bf16=True,
+        optim=device_utils.training_optim(),
+        bf16=mp["bf16"],
+        fp16=mp["fp16"],
         gradient_checkpointing=True,
         max_length=args.max_len,
         logging_steps=5,
@@ -75,6 +80,8 @@ def _train_dpo(args, live):
         save_total_limit=2,
         report_to=args.report_to,
         dataset_num_proc=1,
+        dataloader_pin_memory=device_utils.accelerator() == "cuda",
+        **device_utils.extra_training_args(),
     )
     # With a LoRA adapter, the frozen base doubles as the reference model -> no second copy in VRAM.
     trainer = DPOTrainer(
@@ -90,13 +97,13 @@ def _train_dpo(args, live):
         print(f"--> Resuming from {resume}")
     result = trainer.train(resume_from_checkpoint=resume)
     print(f"--> Done in {time.time() - t0:.1f}s | loss {result.training_loss:.4f} "
-          f"| peak VRAM {torch.cuda.max_memory_allocated() / 1024**3:.2f} GB")
+          f"| peak memory {device_utils.peak_gb_text()}")
 
     final_dir = os.path.join(args.output_dir, "final")
     trainer.save_model(final_dir)
     tokenizer.save_pretrained(final_dir)
     print(f"--> Saved DPO adapter to {final_dir}")
-    live.finish(final_dir, train_loss=result.training_loss, peak_vram_gb=torch.cuda.max_memory_allocated() / 1024**3)
+    live.finish(final_dir, train_loss=result.training_loss, peak_vram_gb=device_utils.peak_gb())
     return final_dir
 
 

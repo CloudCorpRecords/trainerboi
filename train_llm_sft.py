@@ -2,8 +2,11 @@
 train_llm_sft.py - Supervised fine-tuning (SFT) for LLMs on real datasets.
 
 Backends:
-  unsloth : (default) ~2x faster, much lower VRAM. Best on 16 GB cards.
+  unsloth : (default) ~2x faster, much lower VRAM. Best on 16 GB cards. NVIDIA only.
   hf      : plain Transformers + PEFT + TRL. Most compatible with exotic models.
+
+On Macs (Apple Silicon / MPS) and CPU-only machines, Unsloth and 4-bit QLoRA are
+unavailable, so they automatically fall back to the HF backend + LoRA.
 
 Modes:
   qlora   : 4-bit NF4 base + LoRA adapters  (7-8B models fit on 16 GB)
@@ -21,8 +24,21 @@ import os
 import time
 import argparse
 
+import device_utils
 import trainer_utils
 import llm_data
+
+
+def resolve_hw(args):
+    """Downgrade NVIDIA-only options to what this machine supports (with a note)."""
+    if args.backend == "unsloth" and (device_utils.accelerator() != "cuda"
+                                      or not device_utils.has_package("unsloth")):
+        print(f"--> Unsloth needs an NVIDIA GPU; using the HuggingFace backend on {device_utils.device_label()} instead.")
+        args.backend = "hf"
+    if args.mode == "qlora" and not device_utils.supports_4bit():
+        print(f"--> 4-bit QLoRA needs an NVIDIA GPU; using LoRA (full-precision base) on {device_utils.device_label()} instead.")
+        args.mode = "lora"
+    return args
 
 
 def build_model(args):
@@ -51,18 +67,18 @@ def build_model(args):
             )
         return model, tokenizer
 
-    from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+    from transformers import AutoTokenizer, AutoModelForCausalLM
     from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 
     tokenizer = AutoTokenizer.from_pretrained(args.model)
-    quant = None
-    if args.mode == "qlora":
-        quant = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4",
-                                   bnb_4bit_use_double_quant=True, bnb_4bit_compute_dtype=torch.bfloat16)
+    quant, note = device_utils.quant_config_4bit(args.mode == "qlora", "SFT")
+    if note:
+        print(note)
     model = AutoModelForCausalLM.from_pretrained(
-        args.model, quantization_config=quant, dtype=torch.bfloat16,
-        device_map={"": 0}, attn_implementation=args.attn,
+        args.model, quantization_config=quant, attn_implementation=args.attn,
+        **device_utils.model_load_kwargs(),
     )
+    model = device_utils.to_device(model)
     if args.mode == "qlora":
         model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=True)
     if args.mode != "full":
@@ -74,6 +90,7 @@ def build_model(args):
 
 
 def train_sft(args):
+    args = resolve_hw(args)
     # Unsloth must be imported before transformers/trl so it can patch them.
     if args.backend == "unsloth":
         import unsloth  # noqa: F401
@@ -124,6 +141,7 @@ def _train_sft(args, live):
 
     report_to = [r for r in args.report_to.split(",") if r and r != "none"]
 
+    mp = device_utils.mixed_precision()
     config = SFTConfig(
         output_dir=args.output_dir,
         num_train_epochs=args.epochs,
@@ -135,13 +153,14 @@ def _train_sft(args, live):
         lr_scheduler_type="cosine",
         warmup_steps=0.03,  # < 1 means a fraction of total steps
         weight_decay=0.01,
-        optim="paged_adamw_8bit" if args.mode != "full" else "adamw_torch_fused",
-        bf16=True,
-        tf32=True,
+        optim=device_utils.training_optim(want_8bit=args.mode != "full"),
+        bf16=mp["bf16"],
+        fp16=mp["fp16"],
+        tf32=device_utils.allow_tf32(),
         gradient_checkpointing=args.backend == "hf",
         max_length=args.max_seq_len,
         packing=args.packing,
-        use_liger_kernel=args.liger and args.backend == "hf",
+        use_liger_kernel=args.liger and args.backend == "hf" and device_utils.allow_liger(),
         logging_steps=args.logging_steps,
         eval_strategy="steps" if eval_ds is not None else "no",
         eval_steps=args.save_steps,
@@ -150,7 +169,9 @@ def _train_sft(args, live):
         save_total_limit=3,
         report_to=report_to or "none",
         seed=args.seed,
-        dataset_num_proc=1,  # multiprocessing on Windows is slow/fragile
+        dataset_num_proc=1,  # multiprocessing tokenizing is slow/fragile on Windows and macOS
+        dataloader_pin_memory=device_utils.accelerator() == "cuda",
+        **device_utils.extra_training_args(),
     )
 
     trainer = SFTTrainer(
@@ -170,7 +191,7 @@ def _train_sft(args, live):
     result = trainer.train(resume_from_checkpoint=resume)
     print("-" * 65)
     print(f"--> Done in {time.time() - t0:.1f}s | train loss {result.training_loss:.4f} "
-          f"| peak VRAM {torch.cuda.max_memory_allocated() / 1024**3:.2f} GB")
+          f"| peak memory {device_utils.peak_gb_text()}")
     if eval_ds is not None:
         live.phase("Final evaluation")
         metrics = trainer.evaluate()
@@ -192,7 +213,7 @@ def _train_sft(args, live):
         if merged_dir:
             print(f"--> Merged 16-bit model saved to {merged_dir}")
     live.finish(final_dir, train_loss=result.training_loss,
-                peak_vram_gb=torch.cuda.max_memory_allocated() / 1024**3)
+                peak_vram_gb=device_utils.peak_gb())
     return final_dir
 
 

@@ -29,8 +29,9 @@ pyarrow==26.0.0
 matplotlib==3.11.2
 pillow==12.3.0
 psutil==7.2.2
-nvidia-ml-py==13.615.71
+nvidia-ml-py==13.615.71; sys_platform != "darwin"
 requests==2.34.2
+rich>=13.9
 # data intake: documents, web, media
 pypdf==6.20.0
 python-docx==1.2.0
