@@ -91,8 +91,9 @@ SYNTH_SEC_PER_CHUNK = {"quick": 1.3, "balanced": 2.6, "best": 6.0}
 HF_ROWS = {"quick": 3000, "balanced": 20000, "best": 100000}
 SCRATCH_SIZE = {"quick": "tiny", "balanced": "small", "best": "base"}
 
-# Very rough training throughput on a 16 GB Ampere laptop GPU (tokens/sec, QLoRA via Unsloth).
-TOKENS_PER_SEC = {"0.5B": 9000, "1.5B": 4500, "3B": 2500, "7B": 1000, "tiny": 120000, "small": 60000, "base": 25000}
+# Training throughput on a 16 GB Ampere laptop GPU (tokens/sec). 0.5B and 1.5B are measured (16-bit LoRA, batch 16, RTX 3080 Ti
+# Laptop, padding included); 3B and 7B are rough QLoRA figures.
+TOKENS_PER_SEC = {"0.5B": 4800, "1.5B": 1700, "3B": 1500, "7B": 700, "tiny": 120000, "small": 60000, "base": 25000}
 
 
 def model_size(model_id):
@@ -192,6 +193,10 @@ def train_plan(goal, effort, stats=None, vram_gb=16.0, persona=None, model_overr
     else:
         batch, accum = (2, 8) if big or seq > 1536 else (4, 4)
         lr = 2e-4 if size in ("0.5B", "1.5B", "3B") else 1e-4
+        if size in ("0.5B", "1.5B") and (vram_gb or 0) >= 12 and seq <= 1024 and task == "sft":
+            # Small models in 16-bit with ONE big batch per step: measured ~2x faster than 4-bit with accumulation, same loss.
+            batch, accum = 16, 1
+            plan["mode"] = "lora"
     eff = batch * accum
     epochs = 3 if n < 1000 else 2 if n < 10000 else 1
     full_steps = math.ceil(epochs * n / eff)
@@ -199,13 +204,14 @@ def train_plan(goal, effort, stats=None, vram_gb=16.0, persona=None, model_overr
     budget_steps = int(budget / sec_per_step)
     steps = max(30, min(full_steps, budget_steps))
     lora_r = 32 if effort == "best" else 16
-    plan.update(model=model, mode="qlora", max_steps=steps, batch_size=batch, grad_accum=accum, max_seq_len=seq,
+    plan.update(model=model, mode=plan.get("mode", "qlora"), max_steps=steps, batch_size=batch, grad_accum=accum, max_seq_len=seq,
                 lr=lr, lora_r=lora_r, epochs_equiv=round(steps * eff / max(n, 1), 2),
-                packing=task == "sft" and mean_tok < seq / 4,
+                packing=False,        # measured: slower per example and less stable than Unsloth's own padding trimming
                 save_steps=max(50, steps // 4), sample_every=max(25, steps // 6),
                 sample_prompt=g["test_prompts"][0], system_prompt=persona or g["system_prompt"] or None)
 
-    qlora = device_utils.supports_4bit()
+    qlora = device_utils.supports_4bit() and plan["mode"] == "qlora"
+    fast16 = plan["mode"] == "lora" and device_utils.supports_4bit()
     reasons += [
         f"**Base model: {model}** — {'a strong 7B model' + (' (loaded in 4-bit so it fits your GPU)' if qlora else ' (full precision)') if big else f'a {size} instruction-tuned model'}: "
         f"it already speaks well, so we only teach it *your* goal. Bigger = smarter but slower.",
@@ -214,7 +220,9 @@ def train_plan(goal, effort, stats=None, vram_gb=16.0, persona=None, model_overr
          if qlora else
          "**Method: LoRA** — the base model is frozen and we train small \"adapter\" layers on top "
          f"(only ~{1 if lora_r == 16 else 2}% of the weights), with almost the same quality as full training. "
-         "(4-bit QLoRA needs an NVIDIA GPU, so this machine uses full-precision weights.)"),
+         + ("A small model fits in your GPU at full quality, which trains about twice as fast as the compressed 4-bit way, "
+          f"so we feed it one big batch of {batch} examples per step." if fast16 else
+          "(4-bit QLoRA needs an NVIDIA GPU, so this machine uses full-precision weights.)")),
         f"**{steps:,} steps** of {eff} examples each ≈ **{plan['epochs_equiv']} pass(es)** over your {n:,} examples"
         + (" (capped to fit your time budget)." if steps < full_steps else "."),
         f"**Learning rate {lr:g}** — {'the standard, safe rate for LoRA adapters' if task == 'sft' else 'preference tuning needs a tiny rate so the model does not forget what it knows'}; "

@@ -14,7 +14,7 @@ RULES = [
      "The model plus your settings needed more GPU memory than you have free. Close other programs that use the GPU "
      "(games, browsers with video, other training runs), then try a smaller model, a shorter max length, or batch size 1. "
      "Guided training does this automatically."),
-    ("gpu_hw", r"CUBLAS_STATUS_INTERNAL_ERROR|illegal memory access|misaligned address|unspecified launch failure|AcceleratorError|device-side assert",
+    ("gpu_hw", r"CUBLAS_STATUS_INTERNAL_ERROR|CUBLAS_STATUS_EXECUTION_FAILED|CUDA error|illegal memory access|illegal instruction|misaligned address|unspecified launch failure|AcceleratorError|device-side assert",
      "The GPU hit a calculation error",
      "This is almost always caused by the GPU running too hot (laptop GPUs above ~85 °C compute wrong answers). "
      "Let it cool, raise the fan speed or use a cooling pad, set the laptop power mode to Balanced, and resume from the last "

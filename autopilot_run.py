@@ -105,29 +105,8 @@ def main(cfg):
         raise
 
 
-def _arg(cmd, flag):
-    return int(cmd[cmd.index(flag) + 1]) if flag in cmd else None
+from resilient_run import _arg, _set, shrink_for_memory  # shared with the Workshop's resilient runner
 
-
-def _set(cmd, flag, value):
-    if flag in cmd:
-        cmd[cmd.index(flag) + 1] = str(int(value))
-
-
-def shrink_for_memory(cmd):
-    """Halve the per-step batch (doubling accumulation so learning is unchanged); at batch 1 shorten sequences instead."""
-    cmd = list(cmd)
-    batch, accum = _arg(cmd, "--batch_size"), _arg(cmd, "--grad_accum")
-    if batch and batch > 1:
-        _set(cmd, "--batch_size", max(1, batch // 2))
-        _set(cmd, "--grad_accum", (accum or 1) * 2)
-        return cmd
-    for flag in ("--max_seq_len", "--max_len", "--seq_len"):
-        n = _arg(cmd, flag)
-        if n and n > 384:
-            _set(cmd, flag, max(384, int(n * 0.75) // 64 * 64))
-            return cmd
-    return cmd
 
 def _main(job, cfg):
     goal, effort = cfg["goal"], cfg["effort"]
@@ -236,7 +215,7 @@ def _main(job, cfg):
         detail = f"New {plan['size']} model · {plan['max_steps']:,} steps"
     else:
         import device_utils
-        method = "QLoRA" if device_utils.supports_4bit() else "LoRA"
+        method = "QLoRA" if device_utils.supports_4bit() and plan.get("mode") != "lora" else "LoRA"
         detail = f"{plan['model'].split('/')[-1]} + {method} · {plan['max_steps']:,} steps · ~{autopilot._fmt_min(plan['estimate']['train_sec'])}"
     job.step("plan", "done", detail)
 
@@ -258,7 +237,7 @@ def _main(job, cfg):
                "--sample_every", str(plan["sample_every"]), "--sample_prompt", plan["sample_prompt"], "--output_dir", out_dir]
     else:
         cmd = [sys.executable, "-u", "train_llm_sft.py", "--model", plan["model"], "--dataset", train_path,
-               "--mode", "qlora", "--max_steps", str(plan["max_steps"]), "--batch_size", str(plan["batch_size"]),
+               "--mode", plan.get("mode", "qlora"), "--max_steps", str(plan["max_steps"]), "--batch_size", str(plan["batch_size"]),
                "--grad_accum", str(plan["grad_accum"]), "--lr", str(plan["lr"]), "--max_seq_len", str(plan["max_seq_len"]),
                "--lora_r", str(plan["lora_r"]), "--lora_alpha", str(plan["lora_r"] * 2), "--save_steps", str(plan["save_steps"]),
                "--sample_every", str(plan["sample_every"]), "--sample_prompt", plan["sample_prompt"],
@@ -293,6 +272,10 @@ def _main(job, cfg):
                 job.step("train", "running", f"⚠️ The GPU hit an error (usually from overheating). Cooling down, then "
                                              f"continuing from the last checkpoint — retry {attempt} of 3…")
                 gpu_guard.wait_until_cool(68)
+                if attempt >= 2 and plan["task"] == "sft" and "--backend" not in cmd:
+                    cmd += ["--backend", "hf"]      # slower but steadier: avoids the custom kernels that trip on hot laptops
+                    resume = False
+                    job.step("train", "running", "⚠️ Still unsteady - starting over on the steadier (slower) training engine…")
     live = json.load(open(os.path.join(ROOT, out_dir, "live", "status.json"), encoding="utf-8"))
     latest = live.get("latest", {})
     job.s["train_summary"] = {"final_dir": live.get("final_dir"), "best_eval_loss": live.get("best_eval_loss"),

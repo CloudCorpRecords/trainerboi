@@ -833,7 +833,7 @@ async def train_recommend(req: Request):
         return {"size": plan["size"], "steps": plan["max_steps"], "lr": plan["lr"], "batch": plan["batch_size"], "grad_accum": plan["grad_accum"],
                 "seq_len": plan["seq_len"], "lora_r": 16, "mode": None, "minutes": round(plan["estimate"]["train_sec"] / 60), "reasons": plan["reasons"]}
     return {"model": plan["model"], "steps": plan["max_steps"], "lr": plan["lr"], "batch": plan["batch_size"], "grad_accum": plan["grad_accum"],
-            "seq_len": plan["max_seq_len"], "lora_r": plan["lora_r"], "mode": "qlora", "minutes": round(plan["estimate"]["train_sec"] / 60), "reasons": plan["reasons"]}
+            "seq_len": plan["max_seq_len"], "lora_r": plan["lora_r"], "mode": plan.get("mode", "qlora"), "minutes": round(plan["estimate"]["train_sec"] / 60), "reasons": plan["reasons"]}
 
 
 @app.post("/api/train/start")
@@ -878,10 +878,13 @@ async def train_start(req: Request):
             cmd.append("--load_4bit")
     else:
         cmd += ["--size", b.get("size") or "tiny", "--seq_len", str(min(int(seq), 1024)), "--grad_accum", ga, "--save_steps", str(max(100, int(b.get("steps", 600)) // 6))]
+    if method in ("sft", "dpo", "orpo", "kto"):         # checkpoint often, so recovering from a GPU hiccup costs little
+        cmd += ["--save_steps", str(max(25, int(b.get("steps", 300)) // 8))]
     log = open(os.path.join(RUNS, name, "live", "console.log"), "w", encoding="utf-8")
     log.write("$ " + " ".join(cmd) + "\n\n")
     log.flush()
-    subprocess.Popen(cmd, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, env=CHILD_ENV, creationflags=NOWIN)
+    # resilient_run waits out heat-related GPU errors and resumes, or retries with smaller steps after running out of memory
+    subprocess.Popen([sys.executable, "-u", "resilient_run.py", "--"] + cmd, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, env=CHILD_ENV, creationflags=NOWIN)
     return {"name": name}
 
 
