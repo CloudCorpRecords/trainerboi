@@ -109,7 +109,16 @@ def normalize_dpo(ds):
     if not {"chosen", "rejected"} <= cols:
         raise ValueError(f"DPO data needs 'chosen' and 'rejected' columns (plus optional 'prompt'); got {sorted(cols)}")
     keep = [c for c in ("prompt", "chosen", "rejected") if c in cols]
-    return ds.select_columns(keep)
+    ds = ds.select_columns(keep)
+    first = ds[0] if len(ds) else {}
+    if "prompt" in cols and all(isinstance(first.get(k), str) for k in keep):
+        # Plain text pairs -> chat form. TRL then splits prompt from answer with the chat template; with raw strings a prompt that
+        # tokenizes differently on its own than inside "prompt + answer" logs a warning that crashes tokenizing on Windows.
+        def to_chat(r):
+            return {"prompt": [{"role": "user", "content": r["prompt"]}], "chosen": [{"role": "assistant", "content": r["chosen"]}],
+                    "rejected": [{"role": "assistant", "content": r["rejected"]}]}
+        ds = ds.map(to_chat)
+    return ds
 
 
 def split_train_eval(ds, eval_ratio, seed=42):
