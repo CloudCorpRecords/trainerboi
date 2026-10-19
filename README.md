@@ -3,6 +3,9 @@
 **Open-source, local-first LLM training for everyone.** A desktop app for training and fine-tuning language models (and other ML models) on your own
 NVIDIA GPU - no code, no cloud, no account. A beginner can get a good result in a few clicks; experts keep every setting.
 
+### ⬇️ [Download TrainerBoi for Windows](https://github.com/CloudCorpRecords/trainerboi/releases/latest)
+*Free, open-source, and everything stays on your computer. Needs an NVIDIA GPU. Windows may show a SmartScreen warning because the installer isn't code-signed yet: click **More info → Run anyway**. On a Mac? See [Install](#install).*
+
 * ✨ **Guided training** - pick a goal, drop in data (or none), and it chooses the model, method and settings, then shows a live run.
 * 🧮 **Math Lab** - teach a model maths with no dataset: unlimited self-checking problems, learning only from verified answers.
 * 📚 **Data tools** - paste links / repos / datasets / a topic, auto-quality grading (Data doctor), one-click cleaning.
@@ -13,7 +16,7 @@ NVIDIA GPU - no code, no cloud, no account. A beginner can get a good result in 
 
 ## Install
 
-**Windows desktop installer** *(recommended on Windows)* - download `TrainerBoi Setup x.y.z.exe` from the Releases page. On first launch it detects your GPU and
+**Windows desktop installer** *(recommended on Windows)* - download `TrainerBoi Setup x.y.z.exe` from the [Releases page](https://github.com/CloudCorpRecords/trainerboi/releases/latest). On first launch it detects your GPU and
 installs Python + the matching PyTorch for you (5-15 min, one time). Windows may show a SmartScreen warning for unsigned builds.
 
 **macOS (Apple Silicon)** - from source (needs [uv](https://docs.astral.sh/uv/) and Node 20+; training uses Metal/MPS acceleration):
