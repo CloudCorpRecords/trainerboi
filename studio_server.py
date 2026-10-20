@@ -12,6 +12,7 @@ import re
 import io
 import sys
 import json
+import math
 import time
 import glob
 import shutil
@@ -108,9 +109,12 @@ def load_settings():
 
 @app.get("/api/settings")
 def get_settings():
+    import resilient_run
     s = load_settings()
+    prof = resilient_run.profile()
     return {"gpu_max_temp": float(s.get("gpu_max_temp", os.environ.get("TB_MAX_GPU_TEMP", 82))), "root": ROOT,
-            "version": "1.0"}
+            "version": "1.0", "engine": {"steady": resilient_run.prefer_steady(), "fast_failures": prof.get("fast_failures", 0),
+                                         "fast_ok": prof.get("fast_ok", 0)}}
 
 
 @app.post("/api/settings")
@@ -119,6 +123,9 @@ async def set_settings(req: Request):
     s = jread(SETTINGS_PATH, {}) or {}
     if "gpu_max_temp" in body:
         s["gpu_max_temp"] = max(0, min(95, float(body["gpu_max_temp"])))
+    if body.get("reset_engine"):
+        import resilient_run
+        resilient_run.reset_profile()
     with open(SETTINGS_PATH, "w", encoding="utf-8") as f:
         json.dump(s, f)
     load_settings()
@@ -175,7 +182,19 @@ def gpu_check_start():
                 job["progress"] = {"done": int(m.group(1)), "total": int(m.group(2)), "temp": m.group(3), "errors": int(m.group(4))}
             job["log"] = (job["log"] + [line.rstrip()])[-30:]
         p.wait()
-        return jread(os.path.join(ROOT, "gpu_health.json"))
+        res = jread(os.path.join(ROOT, "gpu_health.json")) or {}
+        # Found the temperature where this card starts making mistakes? Keep training safely below it from now on.
+        first = res.get("first_error_temp")
+        cur = float(os.environ.get("TB_MAX_GPU_TEMP", 82) or 0)
+        if not res.get("stable") and first and (cur == 0 or first - 3 < cur):
+            new = max(70, int(first) - 3)
+            s = jread(SETTINGS_PATH, {}) or {}
+            s["gpu_max_temp"] = new
+            with open(SETTINGS_PATH, "w", encoding="utf-8") as f:
+                json.dump(s, f)
+            load_settings()
+            res["new_limit"] = new
+        return res
     return {"job": start_job(run)}
 
 
@@ -354,9 +373,20 @@ def run_detail(name: str):
         log = ""
     import friendly_errors
     help_ = friendly_errors.explain((ap or {}).get("error") or (live or {}).get("error") or "")
-    return {"name": name, "state": state, "help": help_, "autopilot": ap, "goal_title": goal, "live": live, "series": series,
-            "samples": _tail_jsonl(os.path.join(d, "live", "samples.jsonl"), 8), "sub": sub, "log": log,
-            "model_id": f"{name}::{(live or {}).get('task') or ((ap or {}).get('plan') or {}).get('task') or 'sft'}"}
+    return _finite({"name": name, "state": state, "help": help_, "autopilot": ap, "goal_title": goal, "live": live, "series": series,
+                    "samples": _tail_jsonl(os.path.join(d, "live", "samples.jsonl"), 8), "sub": sub, "log": log,
+                    "model_id": f"{name}::{(live or {}).get('task') or ((ap or {}).get('plan') or {}).get('task') or 'sft'}"})
+
+
+def _finite(v):
+    """NaN / infinity can't travel as JSON (a run whose loss blew up would break its own page) - send them as null."""
+    if isinstance(v, float):
+        return v if math.isfinite(v) else None
+    if isinstance(v, dict):
+        return {k: _finite(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [_finite(x) for x in v]
+    return v
 
 
 @app.post("/api/run/{name}/stop")
@@ -427,7 +457,7 @@ def runs_list():
             title = clean_title(autopilot.GOALS.get(ap.get("goal"), {}).get("title")) or name
         out.append({"name": name, "kind": kind, "state": state, "title": title, "updated": os.path.getmtime(d),
                     "loss": ((live or {}).get("latest") or {}).get("loss"), "best_eval": (live or {}).get("best_eval_loss")})
-    return out[:30]
+    return _finite(out[:30])
 
 
 # ================================================================================================ models
@@ -878,6 +908,9 @@ async def train_start(req: Request):
             cmd.append("--load_4bit")
     else:
         cmd += ["--size", b.get("size") or "tiny", "--seq_len", str(min(int(seq), 1024)), "--grad_accum", ga, "--save_steps", str(max(100, int(b.get("steps", 600)) // 6))]
+    import resilient_run
+    if method == "sft" and mode != "full" and resilient_run.prefer_steady():
+        cmd += ["--backend", "hf"]                          # this computer's GPU keeps tripping on the fast engine's kernels
     if method in ("sft", "dpo", "orpo", "kto"):         # checkpoint often, so recovering from a GPU hiccup costs little
         cmd += ["--save_steps", str(max(25, int(b.get("steps", 300)) // 8))]
     log = open(os.path.join(RUNS, name, "live", "console.log"), "w", encoding="utf-8")

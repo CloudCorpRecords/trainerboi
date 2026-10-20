@@ -244,20 +244,34 @@ def _main(job, cfg):
                "--output_dir", out_dir, "--eval_ratio", "0.02"]
         if plan.get("packing"):
             cmd.append("--packing")
+        import resilient_run
+        if resilient_run.prefer_steady():
+            cmd += ["--backend", "hf"]      # this computer's GPU keeps tripping on the fast engine's kernels
     # Checkpoint often enough that a crash costs at most ~1/8 of the run, then retry automatically.
     save_every = str(max(25, plan["max_steps"] // 8))
     cmd[cmd.index("--save_steps") + 1] = save_every
     import gpu_guard
     import friendly_errors
     resume = False
+    import resilient_run
     for attempt in range(1, 5):
+        fast = resilient_run._uses_fast_engine(cmd)
         try:
             job.run(cmd + (["--resume"] if resume and "--resume" not in cmd else []), "train")
+            if fast:
+                resilient_run._record(fast_ok=1)
             break
         except RuntimeError as e:
             kind = (friendly_errors.explain(str(e)) or {}).get("key")
-            if attempt == 4 or kind not in ("gpu_hw", "oom"):
+            if fast and kind in ("gpu_hw", "nan"):
+                resilient_run._record(fast_failures=1)
+            if attempt == 4 or kind not in ("gpu_hw", "oom", "nan"):
                 raise
+            if kind == "nan":   # the newest checkpoint may already hold broken numbers: go back one
+                import glob as _glob
+                ckpts = sorted(_glob.glob(os.path.join(ROOT, out_dir, "checkpoint-*")), key=lambda p: int(p.rsplit("-", 1)[-1]))
+                if ckpts:
+                    shutil.rmtree(ckpts[-1], ignore_errors=True)
             job.s.setdefault("recoveries", []).append({"attempt": attempt, "error": str(e).splitlines()[-1][:200]})
             if kind == "oom":
                 # Out of memory: keep the same effective batch but use less memory per step, and start over (shapes changed).

@@ -16,6 +16,7 @@ Usage inside a training script:
 
 import os
 import json
+import math
 import time
 import traceback
 import contextlib
@@ -242,8 +243,10 @@ class _LiveCallback(TrainerCallback):
         done = state.global_step - m.status.get("start_step", 0)
         sps = (len(self.step_times) - 1) / (self.step_times[-1] - self.step_times[0]) if len(self.step_times) > 1 else None
         remaining = state.max_steps - state.global_step
+        g = self.guard
         m.status.update(step=state.global_step, epoch=state.epoch or 0.0, steps_per_s=sps,
-                        eta_s=remaining / sps if sps else None, steps_done=done)
+                        eta_s=remaining / sps if sps else None, steps_done=done,
+                        gpu_temp=g.last_temp, rest_pct=round(g.rest * 100), rested_s=round(g.rested_s))
         m._write_status()
         if m.sample_every and state.global_step % m.sample_every == 0 and kw.get("model") is not None:
             m.phase("Generating sample")
@@ -266,6 +269,13 @@ class _LiveCallback(TrainerCallback):
         # Tokens/sec from TRL's cumulative token counter.
         if "num_tokens" in row and m.t_train:
             row["tokens_per_s"] = row["num_tokens"] / max(time.time() - m.t_train, 1e-6)
+        loss = row.get("loss")
+        if isinstance(loss, float) and not math.isfinite(loss):
+            # The numbers blew up - on a hot laptop GPU that's usually wrong arithmetic, not a real learning problem.
+            # Stop now instead of training on garbage; resilient_run rolls back to an earlier checkpoint and carries on.
+            m.status.update(phase="Loss became NaN - stopping")
+            m._write_status(force=True)
+            raise RuntimeError(f"Training loss is nan at step {state.global_step} (the GPU computed invalid numbers).")
         m._append("metrics.jsonl", row)
         m.status["latest"].update({k: v for k, v in row.items() if k not in ("time",)})
         if "eval_loss" in row:

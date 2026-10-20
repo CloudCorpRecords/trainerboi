@@ -10,7 +10,7 @@ fs.mkdirSync(path.join(stage, 'app-src'), { recursive: true });
 fs.mkdirSync(path.join(stage, 'bin'), { recursive: true });
 
 const keepExt = new Set(['.py', '.css', '.txt', '.md', '.json']);
-const skipFiles = new Set(['gpu_health.json']);
+const skipFiles = new Set(['gpu_health.json', 'gpu_profile.json']);
 for (const f of fs.readdirSync(root)) {
   const p = path.join(root, f);
   if (fs.statSync(p).isFile() && keepExt.has(path.extname(f)) && !skipFiles.has(f) && !(f.startsWith('model_') && ['.pt', '.json'].includes(path.extname(f)))) {

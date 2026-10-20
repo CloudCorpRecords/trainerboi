@@ -23,7 +23,7 @@ function Timeline({ ap, sub, live }) {
         }
         if (running && s.id === 'train' && live?.max_steps) {
           extra = <div style={{ marginTop: 8 }}><Progress value={live.step / live.max_steps} />
-            <div className="small muted" style={{ marginTop: 4 }}>{live.cooling ? '🧊 Cooling the GPU — pausing keeps results correct. ' : ''}Step {fmt.n(live.step)} of {fmt.n(live.max_steps)}</div></div>
+            <div className="small muted" style={{ marginTop: 4 }}>{live.cooling ? '🧊 Cooling the GPU — pausing keeps results correct. ' : live.rest_pct > 0 ? `🌡️ Keeping cool: resting ${live.rest_pct}% of the time. ` : ''}Step {fmt.n(live.step)} of {fmt.n(live.max_steps)}</div></div>
         }
         return (
           <div key={s.id} className={`tl-item ${s.state}`}>
@@ -127,7 +127,7 @@ export default function Run() {
             <Stat label="Step" value={live?.max_steps ? `${fmt.n(live.step)}` : '–'} sub={live?.max_steps ? `of ${fmt.n(live.max_steps)}` : ''} />
             <Stat label="Loss" value={latest.loss != null ? latest.loss.toFixed(3) : '–'} sub="going down = learning" />
             <Stat label="Speed" value={live?.steps_per_s ? live.steps_per_s.toFixed(2) : '–'} unit="steps/s" sub={latest.tokens_per_s ? `${fmt.n(latest.tokens_per_s)} tokens/s` : ''} />
-            <Stat label="Time left" value={running && live?.eta_s ? fmt.dur(live.eta_s) : '–'} sub={live?.cooling ? 'GPU cooling' : ''} />
+            <Stat label="Time left" value={running && live?.eta_s ? fmt.dur(live.eta_s) : '–'} sub={live?.cooling ? 'GPU cooling' : live?.rest_pct > 0 ? `🌡️ thermostat ${live.rest_pct}%` : ''} />
           </div>
           <Card title="How it's learning 🌱">
             <LineChart yLabel="loss " series={[

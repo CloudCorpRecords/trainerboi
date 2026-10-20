@@ -41,3 +41,5 @@ Thumbs.db
 *.pfx
 *.p12
 *.key
+
+gpu_profile.json

@@ -14,7 +14,13 @@ export default function Settings() {
   const [job, follow] = useJob()
   const [open, setOpen] = useState(openAll())
   useEffect(() => { if (s) setCap(s.gpu_max_temp) }, [s?.gpu_max_temp])
-  useEffect(() => { if (job?.state === 'done') reloadHealth(); if (job?.state === 'error') toast(job.error, 'error') }, [job?.state])
+  useEffect(() => {
+    if (job?.state === 'done') {
+      reloadHealth()
+      if (job.result?.new_limit) { reload(); toast(`Your GPU started making mistakes around ${Math.round(job.result.first_error_temp)}°C, so training now stays under ${job.result.new_limit}°C.`, 'success') }
+    }
+    if (job?.state === 'error') toast(job.error, 'error')
+  }, [job?.state])
   const g = hw?.gpu
   const running = hw?.jobs?.length > 0
 
@@ -44,11 +50,18 @@ export default function Settings() {
         </Card>
 
         <Card title="Keeping it cozy 🧊">
-          <p className="muted" style={{ marginBottom: 14 }}>Laptop GPUs can silently compute wrong answers when they get very hot (we measured this at about 86°C on this machine). TrainerBoi pauses training when the GPU reaches the limit below and continues once it has cooled down.</p>
+          <p className="muted" style={{ marginBottom: 14 }}>Laptop GPUs can silently compute wrong answers when they get very hot (we measured this at about 86°C on this machine). So TrainerBoi works like a thermostat 🌡️: as your GPU gets close to the limit below, training takes tiny rests between steps, just enough to hold it a few degrees under. If it still reaches the limit, training pauses until it cools. Running the wellness check also finds the temperature where <i>your</i> card starts making mistakes and lowers the limit for you if needed.</p>
           <Field label={`Pause training at ${cap}°C${cap === 0 ? ' (off)' : ''}`} hint="82°C is a good default. Lower is safer but slower. 0 turns the safety pause off.">
             <input type="range" min="0" max="92" value={cap} onChange={(e) => setCap(+e.target.value)} />
           </Field>
           <div style={{ marginTop: 10 }}><Button icon={Thermometer} onClick={saveCap} disabled={s && cap === s.gpu_max_temp}>Save</Button></div>
+        </Card>
+
+        <Card title="Training engine 🚂" action={s?.engine && <Chip tone={s.engine.steady ? 'warn' : 'ok'}>{s.engine.steady ? 'Steady engine' : 'Fast engine'}</Chip>}>
+          {s?.engine?.steady
+            ? <p className="muted" style={{ marginBottom: 12 }}>Your GPU tripped up {s.engine.fast_failures} times on the fast engine's special kernels, so Boi now starts small-model training on the <b>steady engine</b> — slower, but it doesn't crash on this computer. If you've improved cooling or updated your drivers, give the fast one another go.</p>
+            : <p className="muted" style={{ marginBottom: 12 }}>Small models train on the <b>fast engine</b> (Unsloth). If your GPU keeps hitting errors with it ({s?.engine?.fast_failures || 0} so far, {s?.engine?.fast_ok || 0} smooth runs), Boi remembers and switches this computer to the steadier engine by itself.</p>}
+          {s?.engine?.steady && <Button onClick={async () => { await post('/api/settings', { reset_engine: true }); reload(); toast('Next run will try the fast engine again. 🤞', 'success') }}>Try the fast engine again</Button>}
         </Card>
 
         <Card title="Open everything 🗝️">

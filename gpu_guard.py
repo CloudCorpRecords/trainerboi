@@ -4,8 +4,9 @@ gpu_guard.py - Keep training correct on GPUs that misbehave when hot (common on 
 Some GPUs return silently wrong results or crash ("illegal memory access", "CUBLAS_STATUS_INTERNAL_ERROR")
 once they run very hot. Two tools:
 
-  ThermalGuard   pauses training when the GPU reaches TB_MAX_GPU_TEMP (default 82 °C) and resumes once it has
-                 cooled by 5 °C. Used automatically by live_monitor.py in every training script. Set
+  ThermalGuard   a thermostat that rests briefly between steps to hold the GPU just under TB_MAX_GPU_TEMP (default
+                 82 °C), plus a full pause at the limit until it has cooled by 5 °C. Used automatically by
+                 live_monitor.py in every training script. Set
                  TB_MAX_GPU_TEMP=0 to disable. (On Macs the temperature can't be read without root, so the
                  guard stays idle; macOS throttles a hot chip itself.)
   health_check   a stress test that repeats identical GPU work and verifies the results never change.
@@ -27,6 +28,14 @@ HEALTH_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gpu_heal
 
 def gpu_temp():
     """GPU temperature in °C, or None when it can't be read (Macs, CPU-only machines)."""
+    try:                                   # straight from the driver: microseconds, so the thermostat can check every second
+        import hw_info
+        import pynvml
+        dev = hw_info._nvml()
+        if dev is not None:
+            return float(pynvml.nvmlDeviceGetTemperature(dev, pynvml.NVML_TEMPERATURE_GPU))
+    except Exception:
+        pass
     try:
         out = subprocess.run(["nvidia-smi", "--query-gpu=temperature.gpu", "--format=csv,noheader,nounits"],
                              capture_output=True, text=True, timeout=5,
@@ -44,14 +53,27 @@ def max_temp_setting():
 
 
 class ThermalGuard:
-    def __init__(self, max_temp=None, hysteresis=5.0, check_every_s=3.0, on_pause=None, on_resume=None):
+    """Two layers. The thermostat: as the GPU nears the limit it rests briefly after each step (a share of the time that grows
+    with the heat), holding the temperature just under the limit instead of bouncing off it - laptops that live at 85+ °C
+    keep training smoothly. The backstop: at the limit itself, a full pause until the GPU has cooled by `hysteresis`."""
+
+    HOLD_BELOW = 3.0      # the thermostat aims this many °C under the limit
+    GAIN = 0.03           # rest share added per second, per °C over the aim (removed the same way when under it)
+    RISE_GAIN = 0.08      # extra rest per °C/s of warming once near the aim: laptops heat ~1 °C/s, so react early
+    MAX_REST = 0.6        # at most 60% rest - beyond that a full pause (the backstop) is the better tool
+
+    def __init__(self, max_temp=None, hysteresis=5.0, check_every_s=1.0, on_pause=None, on_resume=None, thermostat=True):
         self.max_temp = max_temp_setting() if max_temp is None else max_temp
         self.hyst = hysteresis
         self.check_every = check_every_s
         self.on_pause, self.on_resume = on_pause, on_resume
+        self.thermostat = thermostat
         self._last = 0.0
+        self._step_end = None
         self.paused_s = 0.0
         self.pauses = 0
+        self.rest = 0.0          # current share of time spent resting (0..MAX_REST)
+        self.rested_s = 0.0
         self.last_temp = None
 
     @property
@@ -59,14 +81,37 @@ class ThermalGuard:
         return bool(self.max_temp)
 
     def maybe_cool(self):
-        """Call often (e.g. every training step). Cheap: checks the temperature at most every few seconds."""
-        if not self.enabled or time.time() - self._last < self.check_every:
+        """Call once per training step. Cheap: reads the temperature at most every few seconds."""
+        now = time.time()
+        step_s = now - self._step_end if self._step_end else None
+        self._step_end = now
+        if not self.enabled:
             return
-        self._last = time.time()
-        t = gpu_temp()
-        self.last_temp = t
-        if t is None or t < self.max_temp:
-            return
+        if now - self._last >= self.check_every:
+            dt = min(10.0, now - self._last) if self._last else self.check_every
+            self._last = now
+            prev, t = self.last_temp, gpu_temp()
+            self.last_temp = t
+            if t is not None and t >= self.max_temp:
+                self._pause(t)
+                self.rest = max(self.rest, 0.4)       # come back gently rather than at full heat
+                self._step_end = time.time()
+                return
+            if t is not None and self.thermostat:
+                aim = self.max_temp - self.HOLD_BELOW
+                rise = (t - prev) / dt if prev is not None and dt > 0 else 0.0
+                change = self.GAIN * (t - aim) * dt
+                if t > aim - 4 and rise > 0:
+                    change += self.RISE_GAIN * rise * dt
+                self.rest = min(self.MAX_REST, max(0.0, self.rest + change))
+        if self.rest > 0.01 and step_s:
+            device_utils.synchronize()                # let queued GPU work finish so the card really idles
+            pause = min(5.0, step_s * self.rest / (1 - self.rest))
+            time.sleep(pause)
+            self.rested_s += pause
+            self._step_end = time.time()              # resting doesn't count as step time
+
+    def _pause(self, t):
         self.pauses += 1
         start = time.time()
         if self.on_pause:

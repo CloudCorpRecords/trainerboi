@@ -14,6 +14,7 @@ import collections
 import glob
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -46,6 +47,50 @@ def shrink_for_memory(cmd):
             _set(cmd, flag, max(384, int(n * 0.75) // 64 * 64))
             return cmd
     return cmd
+
+
+# What we've learned about this computer's fast engine (Unsloth). Some laptops throw GPU errors with its custom kernels
+# whatever the temperature; after a few, new runs start straight on the steady engine instead of failing twice first.
+PROFILE = os.path.join(ROOT, "gpu_profile.json")
+
+
+def profile():
+    try:
+        return json.load(open(PROFILE, encoding="utf-8"))
+    except (OSError, ValueError):
+        return {"fast_failures": 0, "fast_ok": 0}
+
+
+def _record(fast_ok=0, fast_failures=0):
+    p = profile()
+    p["fast_ok"] = p.get("fast_ok", 0) + fast_ok
+    p["fast_failures"] = p.get("fast_failures", 0) + fast_failures
+    p["updated"] = time.strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        with open(PROFILE, "w", encoding="utf-8") as f:
+            json.dump(p, f)
+    except OSError:
+        pass
+
+
+def prefer_steady():
+    p = profile()
+    return p.get("fast_failures", 0) >= 3 and p.get("fast_failures", 0) > 2 * p.get("fast_ok", 0)
+
+
+def reset_profile():
+    try:
+        os.remove(PROFILE)
+    except OSError:
+        pass
+
+
+def _uses_fast_engine(cmd):
+    return any(c.endswith("train_llm_sft.py") for c in cmd) and "--backend" not in cmd and _arg_str(cmd, "--mode") != "full"
+
+
+def _arg_str(cmd, flag):
+    return cmd[cmd.index(flag) + 1] if flag in cmd else None
 
 
 def _status_path(cmd):
@@ -90,13 +135,18 @@ def main():
     is_sft = any(c.endswith("train_llm_sft.py") for c in cmd)
     hw_failures = 0
     for attempt in range(1, MAX_ATTEMPTS + 1):
+        fast = _uses_fast_engine(cmd)
         rc, tail = run_once(cmd)
         if rc == 0:
+            if fast:
+                _record(fast_ok=1)
             return 0
         kind = (friendly_errors.explain(tail) or {}).get("key")
         if kind is None and (rc < 0 or rc >= 0xC0000000):
             kind = "gpu_hw"       # the process died natively (access violation / fast-fail) - on these laptops that's the GPU, not a bug
-        if attempt == MAX_ATTEMPTS or kind not in ("gpu_hw", "oom"):
+        if fast and kind in ("gpu_hw", "nan"):
+            _record(fast_failures=1)
+        if attempt == MAX_ATTEMPTS or kind not in ("gpu_hw", "oom", "nan"):
             return rc
         out = cmd[cmd.index("--output_dir") + 1] if "--output_dir" in cmd else ""
         if kind == "oom":
@@ -110,6 +160,12 @@ def main():
                 pass
             continue
         hw_failures += 1
+        if kind == "nan":
+            # The newest checkpoint may already hold the broken numbers: drop it and go back one.
+            ckpts = sorted(glob.glob(os.path.join(ROOT, out, "checkpoint-*")), key=lambda p: int(p.rsplit("-", 1)[-1]))
+            if ckpts:
+                shutil.rmtree(ckpts[-1], ignore_errors=True)
+            _say("The loss turned into NaN (the GPU computed invalid numbers). Rolling back one checkpoint.")
         _tell(cmd, f"The GPU hit an error (usually heat) - cooling down, then trying again (attempt {attempt + 1} of {MAX_ATTEMPTS})")
         _say(f"GPU error #{hw_failures}. Letting the card cool, then trying again.")
         gpu_guard.wait_until_cool(66)
