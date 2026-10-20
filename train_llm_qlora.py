@@ -131,7 +131,8 @@ def train_qlora(
         model=model,
         args=training_args,
         train_dataset=tokenized_dataset,
-        data_collator=data_collator
+        data_collator=data_collator,
+        callbacks=[trainer_utils.make_thermal_callback()]
     )
     
     print("\n--> Commencing QLoRA training loop...")

@@ -187,6 +187,26 @@ def get_optimal_dataloader_kwargs():
 enable_maximum_gpu_performance()
 
 
+def make_thermal_callback(guard=None):
+    """An HF TrainerCallback that thermostats every step (see gpu_guard.ThermalGuard).
+
+    Shared by every Trainer-based script (QLoRA, embeddings, ...) so a hot laptop GPU
+    rests/pauses instead of computing wrong results. Lazy imports keep this module
+    usable in processes that never train.
+    """
+    from transformers import TrainerCallback
+    from gpu_guard import ThermalGuard
+
+    class ThermalGuardCallback(TrainerCallback):
+        def __init__(self):
+            self.guard = guard if guard is not None else ThermalGuard()
+
+        def on_step_end(self, args, state, control, **kw):
+            self.guard.maybe_cool()
+
+    return ThermalGuardCallback()
+
+
 def benchmark_gpu(size=4096, iters=20):
     """Quick matmul throughput test on this machine's accelerator; returns a human-readable report."""
     import time

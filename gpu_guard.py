@@ -159,14 +159,15 @@ def health_check(seconds=180, progress=None):
     q, k, v = (torch.randn(8, 14, 1024, 64, device=dev, dtype=dtype) for _ in range(3))
     mem = torch.randn(128 * 1024 * 1024 // 2, device=dev, dtype=dtype)
 
-    if dev == "cuda":
-        from torch.nn.attention import sdpa_kernel, SDPBackend
-        attn = sdpa_kernel(SDPBackend.EFFICIENT_ATTENTION)
-    else:
-        attn = contextlib.nullcontext()  # MPS uses its own SDPA path
+    def attn_ctx():
+        # A fresh context per call: sdpa_kernel managers are not re-enterable.
+        if dev == "cuda":
+            from torch.nn.attention import sdpa_kernel, SDPBackend
+            return sdpa_kernel(SDPBackend.EFFICIENT_ATTENTION)
+        return contextlib.nullcontext()  # MPS uses its own SDPA path
 
     def work():
-        with attn:
+        with attn_ctx():
             o = F.scaled_dot_product_attention(q, k, v, is_causal=True)
         return a @ b, o, mem * 1.5 + 0.25
 
@@ -174,7 +175,8 @@ def health_check(seconds=180, progress=None):
     device_utils.synchronize()
     names = ["matrix math", "attention", "memory"]
     bad = dict.fromkeys(names, 0)
-    t0, it, temps, first_error_temp = time.time(), 0, [], None
+    limit = max_temp_setting()
+    t0, it, temps, first_error_temp, aborted = time.time(), 0, [], None, False
     while time.time() - t0 < seconds:
         for name, r, o in zip(names, ref, work()):
             if not torch.equal(r, o):
@@ -182,13 +184,18 @@ def health_check(seconds=180, progress=None):
                 if first_error_temp is None:
                     first_error_temp = temps[-1] if temps else gpu_temp()
         it += 1
-        if it % 100 == 0:
-            temps.append(gpu_temp())
-            if progress:
-                progress(time.time() - t0, seconds, temps[-1], sum(bad.values()))
+        if it % 20 == 0:
+            t = gpu_temp()
+            if t is not None:
+                temps.append(t)
+                if limit and t >= limit:
+                    aborted = True  # stop stressing a GPU already at the training limit
+                    break
+        if it % 100 == 0 and progress:
+            progress(time.time() - t0, seconds, temps[-1] if temps else None, sum(bad.values()))
     errors = sum(bad.values())
-    result = {"stable": errors == 0, "device": device_utils.device_name(), "errors": errors, "by_type": bad,
-              "iterations": it, "seconds": round(time.time() - t0),
+    result = {"stable": errors == 0 and not aborted, "device": device_utils.device_name(), "errors": errors, "by_type": bad,
+              "iterations": it, "seconds": round(time.time() - t0), "aborted_too_hot": aborted,
               "max_temp": max((t for t in temps if t), default=None), "first_error_temp": first_error_temp,
               "checked_at": time.strftime("%Y-%m-%d %H:%M:%S")}
     with open(HEALTH_FILE, "w") as f:
@@ -202,6 +209,11 @@ def explain(result):
         return "No health check yet."
     if result.get("skipped"):
         return "No GPU found, so there was nothing to stress-test — training will use the CPU (slow but fine for tiny models)."
+    if result.get("aborted_too_hot"):
+        return (f"⚠️ **Health check stopped early: the GPU reached the {max_temp_setting():.0f} °C limit** "
+                f"after {result['seconds']}s ({result['iterations']:,} runs, {result['errors']} error(s) so far). "
+                "Stressing it further risks wrong results and driver crashes, so this run proves nothing about stability yet.\n\n"
+                "**Cool it first:** raise the back of the laptop, use max fans / Balanced (not Boost) mode in your laptop control app, then run this check again.")
     if result["stable"]:
         temp = f", peaking at {result['max_temp']:.0f} °C" if result.get("max_temp") else ""
         return (f"✅ **Your {result.get('device') or 'GPU'} computed correctly** — {result['iterations']:,} identical runs "

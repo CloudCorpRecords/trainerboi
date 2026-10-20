@@ -12,6 +12,7 @@ from torch.utils.data import DataLoader, TensorDataset
 import timm
 import device_utils
 import trainer_utils
+from gpu_guard import ThermalGuard
 
 def train_vision_model(model_name="resnet18", num_classes=5, epochs=3, batch_size=64, img_size=224):
     trainer_utils.clear_gpu_memory()
@@ -53,6 +54,7 @@ def train_vision_model(model_name="resnet18", num_classes=5, epochs=3, batch_siz
     scaler = torch.amp.GradScaler("cuda" if use_amp else "cpu", enabled=(use_amp and not use_bf16))
     
     print(f"--> Commencing training for {epochs} epochs...")
+    guard = ThermalGuard()
     t0 = time.time()
     
     for epoch in range(1, epochs + 1):
@@ -63,6 +65,7 @@ def train_vision_model(model_name="resnet18", num_classes=5, epochs=3, batch_siz
         ep_start = time.time()
         
         for imgs, labels in loader:
+            guard.maybe_cool()
             imgs = imgs.to(device, memory_format=torch.channels_last, non_blocking=True)
             labels = labels.to(device, non_blocking=True)
             optimizer.zero_grad()

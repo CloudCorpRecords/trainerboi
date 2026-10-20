@@ -79,7 +79,8 @@ def train_embedding_model(
         model=model,
         args=training_args,
         train_dataset=train_data,
-        loss=loss
+        loss=loss,
+        callbacks=[trainer_utils.make_thermal_callback()]
     )
     
     print("--> Starting GPU embedding fine-tuning loop...")

@@ -13,6 +13,17 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, classification_report, r2_score, mean_squared_error
 import device_utils
 import trainer_utils
+from gpu_guard import ThermalGuard
+
+
+class TabularThermalCallback(xgb.callback.TrainingCallback):
+    """Thermostat every boosting round: XGBoost on GPU heats the same way torch does."""
+    def __init__(self, guard=None):
+        self.guard = guard if guard is not None else ThermalGuard()
+
+    def after_iteration(self, model, epoch, evals_log):
+        self.guard.maybe_cool()
+        return False
 
 def generate_sample_dataset(n_samples=100000, n_features=25, is_classification=True):
     print(f"--> Generating synthetic dataset ({n_samples:,} rows x {n_features} features)...")
@@ -61,23 +72,26 @@ def train_tabular_model(csv_path=None, target_col="target", task_type="classific
     
     t0 = time.time()
     
+    dtrain = xgb.DMatrix(X_train, label=y_train)
+    dtest = xgb.DMatrix(X_test, label=y_test)
+    # Native train API: the sklearn fit() in XGBoost 3.x takes no callbacks.
     if task_type.lower() == "classification":
-        model = xgb.XGBClassifier(
-            device=device_utils.xgb_device(),
-            tree_method="hist",
-            max_bin=256,
-            subsample=0.8,
-            colsample_bytree=0.8,
-            n_estimators=n_estimators,
-            max_depth=max_depth,
-            learning_rate=learning_rate,
-            eval_metric="logloss",
-            random_state=42
-        )
-        model.fit(X_train, y_train, eval_set=[(X_test, y_test)], verbose=50)
+        n_classes = len(np.unique(y_train))
+        params = {
+            "device": xgb_dev, "tree_method": "hist", "max_bin": 256,
+            "subsample": 0.8, "colsample_bytree": 0.8, "max_depth": max_depth,
+            "eta": learning_rate, "eval_metric": "logloss", "seed": 42,
+            "objective": "multi:softprob" if n_classes > 2 else "binary:logistic",
+        }
+        if n_classes > 2:
+            params["num_class"] = n_classes
+        model = xgb.train(params, dtrain, num_boost_round=n_estimators,
+                          evals=[(dtest, "test")], verbose_eval=50,
+                          callbacks=[TabularThermalCallback()])
         fit_time = time.time() - t0
-        
-        preds = model.predict(X_test)
+
+        proba = model.predict(dtest)
+        preds = proba.argmax(axis=1) if proba.ndim > 1 else (proba > 0.5).astype(int)
         acc = accuracy_score(y_test, preds)
         print("-" * 60)
         print(f"--> Training completed in {fit_time:.2f} seconds!")
@@ -86,19 +100,17 @@ def train_tabular_model(csv_path=None, target_col="target", task_type="classific
         
         output_file = "model_xgboost_classifier.json"
     else:
-        model = xgb.XGBRegressor(
-            device=device_utils.xgb_device(),
-            tree_method="hist",
-            n_estimators=n_estimators,
-            max_depth=max_depth,
-            learning_rate=learning_rate,
-            eval_metric="rmse",
-            random_state=42
-        )
-        model.fit(X_train, y_train, eval_set=[(X_test, y_test)], verbose=50)
+        params = {
+            "device": xgb_dev, "tree_method": "hist", "max_depth": max_depth,
+            "eta": learning_rate, "eval_metric": "rmse", "seed": 42,
+            "objective": "reg:squarederror",
+        }
+        model = xgb.train(params, dtrain, num_boost_round=n_estimators,
+                          evals=[(dtest, "test")], verbose_eval=50,
+                          callbacks=[TabularThermalCallback()])
         fit_time = time.time() - t0
-        
-        preds = model.predict(X_test)
+
+        preds = model.predict(dtest)
         r2 = r2_score(y_test, preds)
         rmse = np.sqrt(mean_squared_error(y_test, preds))
         print("-" * 60)
