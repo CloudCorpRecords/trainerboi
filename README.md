@@ -1,7 +1,33 @@
-# 🚂 TrainerBoi - train your own AI on your own computer
+<p align="center">
+  <img src="assets/hero.jpg" alt="Boi the little train chugging through a starry night toward a cozy cottage" width="100%">
+</p>
 
-**Open-source, local-first LLM training for everyone.** A desktop app for training and fine-tuning language models (and other ML models) on your own
-NVIDIA GPU - no code, no cloud, no account. A beginner can get a good result in a few clicks; experts keep every setting.
+<h1 align="center">🚂 TrainerBoi</h1>
+
+<p align="center">
+  <strong>Train your own AI on your own computer.</strong><br>
+  Open-source, local-first LLM training for everyone — no code, no cloud, no account.
+</p>
+
+<p align="center">
+  <a href="https://github.com/CloudCorpRecords/trainerboi/actions/workflows/ci.yml"><img src="https://github.com/CloudCorpRecords/trainerboi/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/CloudCorpRecords/trainerboi" alt="MIT License"></a>
+  <img src="https://img.shields.io/badge/python-3.11-blue" alt="Python 3.11">
+  <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS-lightgrey" alt="Windows and macOS">
+  <img src="https://img.shields.io/badge/GPU-NVIDIA%20%7C%20Apple%20Metal-green" alt="NVIDIA and Apple Metal">
+</p>
+
+<p align="center">
+  <a href="#install"><strong>Get started</strong></a> ·
+  <a href="#screenshots">Screenshots</a> ·
+  <a href="#the-app-at-a-glance">Tour</a> ·
+  <a href="#math-lab">Math Lab</a> ·
+  <a href="#training-methods">Methods</a> ·
+  <a href="https://github.com/CloudCorpRecords/trainerboi/discussions">Discussions</a>
+</p>
+
+A desktop app for training and fine-tuning language models (and other ML models) on your own
+computer — NVIDIA GPU or Apple Silicon. A beginner gets a good result in a few clicks; experts keep every setting.
 
 ### ⬇️ [Download TrainerBoi for Windows](https://github.com/CloudCorpRecords/trainerboi/releases/latest)
 *Free, open-source, and everything stays on your computer. Needs an NVIDIA GPU. Windows may show a SmartScreen warning because the installer isn't code-signed yet: click **More info → Run anyway**. On a Mac? See [Install](#install).*
@@ -14,6 +40,16 @@ NVIDIA GPU - no code, no cloud, no account. A beginner can get a good result in 
 * 🌸 **Calm and cute** - meet Boi, the little train: his eyes follow your mouse, he cheers milestones, blushes when you share, sweats when the GPU is toasty, and hops when you click him (double-click for a spin; the 💤 button lets him nap). A garden grows one flower per model; runs play out as a storybook journey (scenery scrolls past, signposts for each step, a cottage waiting at the end, rain if something goes wrong); Professor Hoot the owl and Biscuit the bunny cheer on maths and data; a sticker book and Boi's closet (hats!) reward real milestones; optional pixie-dust cursor trail; pages glide in and numbers count up. Two themes (night / day), optional little sounds (the bell), gentle words.
 * ⚡ **Fast and sturdy on hot laptops** - small models train in 16-bit with one big batch per step (about 2× faster than 4-bit with accumulation on an RTX 3080 Ti Laptop, same loss; measured with Qwen2.5-0.5B, 640 examples: ~19 examples/s vs ~12). Laptop GPUs can throw random CUDA errors when hot, so every run is supervised: it checkpoints often, waits for the card to cool, resumes, retries with smaller steps after an out-of-memory, and falls back to the slower, steadier engine if needed. A **thermostat** takes tiny rests between steps to hold the GPU just under your limit instead of slamming into it; if the loss ever turns into NaN (a hot GPU computing garbage) training stops at once and rolls back a checkpoint, so a broken model is never saved; the **wellness check** finds the temperature where *your* card starts making mistakes and lowers the limit for you; and if your GPU keeps tripping on the fast engine, TrainerBoi **remembers** and starts that computer on the steady engine (Care & comfort → *Try the fast engine again* to reset). Things we measured that did *not* help here (so they're off): sequence packing, and speculative decoding for chat.
 * 🛡️ **Safe by default** - local-only server, hot-GPU protection, no tokens stored. See [SECURITY.md](SECURITY.md).
+
+## Screenshots
+
+| Home — your GPU at a glance | Guided training — goal → data → time |
+|---|---|
+| ![Home screen](assets/screenshots/home.png) | ![Guided training](assets/screenshots/train.png) |
+
+| Math Lab — teach maths with zero data |
+|---|
+| ![Math Lab](assets/screenshots/math.png) |
 
 ## Install
 
