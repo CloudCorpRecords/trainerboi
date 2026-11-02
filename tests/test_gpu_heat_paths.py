@@ -1,4 +1,3 @@
-import importlib.util
 import os
 import sys
 import tempfile
@@ -25,9 +24,10 @@ class HealthCheckHeatAbort(unittest.TestCase):
 
 class SharedThermalCallback(unittest.TestCase):
     def test_step_end_calls_the_guard(self):
-        if importlib.util.find_spec("torch") is None:
-            self.skipTest("needs torch installed (trainer_utils imports it)")
-        import trainer_utils
+        try:
+            import trainer_utils
+        except ImportError:
+            self.skipTest("needs torch (imported by trainer_utils)")
         guard = mock.Mock()
         cb = trainer_utils.make_thermal_callback(guard=guard)
         cb.on_step_end(None, None, None)
@@ -49,9 +49,10 @@ class VisionAndTabularGuards(unittest.TestCase):
         self.assertIn("maybe_cool()", src)
 
     def test_tabular_callback_calls_the_guard(self):
-        if importlib.util.find_spec("pandas") is None or importlib.util.find_spec("xgboost") is None:
-            self.skipTest("needs the tabular training stack (pandas, xgboost)")
-        import train_tabular
+        try:
+            import train_tabular
+        except ImportError:
+            self.skipTest("needs xgboost (imported by train_tabular)")
         guard = mock.Mock()
         cb = train_tabular.TabularThermalCallback(guard=guard)
         cb.after_iteration(None, 0, None)
